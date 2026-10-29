@@ -56,6 +56,5 @@ apps/ai/evals/results/
 docs/specs/
 docs/followups/
 docs/superpowers/
-.claude/handoffs/
-.claude/settings.local.json
+.claude/
 .superpowers/
