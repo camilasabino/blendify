@@ -1,19 +1,16 @@
 # Dependencies
 node_modules/
-**/node_modules/
 
 # Build
 dist/
-**/dist/
 build/
-**/build/
 .next/
 .turbo/
+*.tsbuildinfo
 
-# Env
+# Environment variables
 .env
-.env.local
-.env.*.local
+.env.*
 !.env.example
 
 # IDE / OS
@@ -27,7 +24,6 @@ build/
 logs/
 *.log
 coverage/
-**/coverage/
 
 # Prisma
 apps/api/prisma/*.db
@@ -36,9 +32,6 @@ apps/api/prisma/*.db-journal
 # Test / Playwright
 test-results/
 playwright-report/
-.playwright-mcp/
-apps/web/playwright-report/
-apps/web/test-results/
 
 # Python (apps/ai)
 .venv/
@@ -47,14 +40,6 @@ __pycache__/
 .ruff_cache/
 apps/ai/evals/results/
 
-# Misc
-*.tsbuildinfo
+# Cache / local application data
 .cache/
 .blendify/
-
-# Internal development docs stay local
-docs/specs/
-docs/followups/
-docs/superpowers/
-.claude/
-.superpowers/
