@@ -256,7 +256,6 @@ variables, IaC, backups, and rollback are documented in
 | [`docs/engineering/ai-data-handling.md`](docs/engineering/ai-data-handling.md) | Where AI data goes and what is logged |
 | [`docs/deployment.md`](docs/deployment.md) | Production runbook |
 | [`docs/media/README.md`](docs/media/README.md) | Screenshot and media maintenance |
-| [`CLAUDE.md`](CLAUDE.md) | Working rules for coding agents |
 
 ## External services
 
