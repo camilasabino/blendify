@@ -66,15 +66,23 @@ export function ErrorState({
 
 export function FieldError({
   children,
+  id,
+  role,
   className,
 }: Readonly<{
   children: ReactNode
+  id?: string
+  role?: 'alert'
   className?: string
 }>) {
   if (!children) {
     return null
   }
-  return <p className={cn('text-sm text-danger', className)}>{children}</p>
+  return (
+    <p id={id} role={role} className={cn('text-sm text-danger', className)}>
+      {children}
+    </p>
+  )
 }
 
 export { LoadingState } from '@/components/ui/spinner'

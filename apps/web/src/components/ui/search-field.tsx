@@ -12,6 +12,8 @@ type SearchFieldProps = Readonly<{
   className?: string
   inputClassName?: string
   'aria-label'?: string
+  'aria-describedby'?: string
+  'aria-invalid'?: boolean
 }>
 
 export function SearchField({
@@ -23,6 +25,8 @@ export function SearchField({
   className,
   inputClassName,
   'aria-label': ariaLabel,
+  'aria-describedby': ariaDescribedBy,
+  'aria-invalid': ariaInvalid,
 }: SearchFieldProps) {
   return (
     <div className={cn('relative min-w-0', className)}>
@@ -40,6 +44,8 @@ export function SearchField({
           inputClassName,
         )}
         aria-label={ariaLabel ?? placeholder}
+        aria-describedby={ariaDescribedBy}
+        aria-invalid={ariaInvalid}
       />
       {loading ? (
         <span className="absolute right-2.5 top-1/2 -translate-y-1/2">

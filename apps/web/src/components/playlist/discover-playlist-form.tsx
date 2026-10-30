@@ -105,6 +105,7 @@ function DiscoverSeedField({
   artist,
   track,
   seedSearchId,
+  seedErrorId,
   selectedArtistIds,
   selectedTrackIds,
   onSelectArtist,
@@ -117,6 +118,7 @@ function DiscoverSeedField({
   artist: Artist | null
   track: TrackDto | null
   seedSearchId: string
+  seedErrorId?: string
   selectedArtistIds: Set<string>
   selectedTrackIds: Set<string>
   onSelectArtist: (artist: Artist) => void
@@ -148,6 +150,7 @@ function DiscoverSeedField({
         ) : (
           <ArtistSearch
             inputId={seedSearchId}
+            errorId={seedErrorId}
             selectedIds={selectedArtistIds}
             onSelect={onSelectArtist}
           />
@@ -180,6 +183,7 @@ function DiscoverSeedField({
       ) : (
         <TrackSearch
           inputId={seedSearchId}
+          errorId={seedErrorId}
           selectedIds={selectedTrackIds}
           onSelect={onSelectTrack}
         />
@@ -203,6 +207,7 @@ export function DiscoverPlaylistForm() {
   const copiedLink = useCopiedLink()
   const formRef = useRef<HTMLFormElement>(null)
   const seedSearchId = useId()
+  const rootErrorId = useId()
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -441,6 +446,7 @@ export function DiscoverPlaylistForm() {
     'discover',
   )
   const coverError = runCoverError(spec?.coverFailed, result, t)
+  const rootError = form.formState.errors.root?.message ?? null
   let disabledReason: string | null = t('common.loading')
   if (capabilities.isResolved) {
     disabledReason = playlistRun.busyFeature
@@ -475,6 +481,8 @@ export function DiscoverPlaylistForm() {
           workingTitleKey={workingCopy.workingTitle}
           workingHintKey={workingCopy.workingHint}
           requestStarted={playlistRun.isActive}
+          preparedTransfer={playlistRun.preparedTransfer}
+          onTransferPrepared={playlistRun.attachTransfer}
           copied={copiedLink.copied}
           onCopy={(url) => void copiedLink.copy(url)}
           onRetry={() => void playlistRun.rerun()}
@@ -523,6 +531,7 @@ export function DiscoverPlaylistForm() {
                 artist={artist}
                 track={track}
                 seedSearchId={seedSearchId}
+                seedErrorId={rootError ? rootErrorId : undefined}
                 selectedArtistIds={selectedArtistIds}
                 selectedTrackIds={selectedTrackIds}
                 onSelectArtist={selectArtist}
@@ -598,7 +607,8 @@ export function DiscoverPlaylistForm() {
           <GenerationSubmitBar
             isGenerating={isGenerating}
             disabledReason={disabledReason}
-            error={form.formState.errors.root?.message ?? null}
+            error={rootError}
+            errorId={rootErrorId}
             idleLabel={result ? t(formCopy.generateNew) : t(formCopy.generate)}
             busyLabel={t(formCopy.generating)}
             summary={estimateSummary}

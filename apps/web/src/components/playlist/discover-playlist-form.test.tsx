@@ -328,3 +328,22 @@ describe('DiscoverPlaylistForm region filter', () => {
     ).toBeInTheDocument()
   })
 })
+
+describe('DiscoverPlaylistForm validation errors', () => {
+  it('announces a missing seed on the seed search', async () => {
+    setAuthState(null)
+    const { calls } = stubApi({})
+    renderWithProviders(<DiscoverPlaylistForm />, { route: '/app/discover' })
+
+    const submit = screen.getByRole('button', { name: 'Generate playlist' })
+    fireEvent.submit(submit.closest('form')!)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Choose an artist first.',
+    )
+    const search = screen.getByRole('combobox')
+    expect(search).toHaveAttribute('aria-invalid', 'true')
+    expect(search).toHaveAccessibleDescription('Choose an artist first.')
+    expect(calls.filter((call) => call.method === 'POST')).toHaveLength(0)
+  })
+})

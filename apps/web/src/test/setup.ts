@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest'
+import { usePlaylistRunStore } from '@/stores/playlist-run-store'
 
 HTMLDialogElement.prototype.showModal ??= function showModal(
   this: HTMLDialogElement,
@@ -13,3 +14,10 @@ HTMLDialogElement.prototype.close ??= function close(this: HTMLDialogElement) {
   this.removeAttribute('open')
   this.dispatchEvent(new Event('close'))
 }
+
+window.scrollTo = () => {}
+
+afterEach(() => {
+  usePlaylistRunStore.getState().discard()
+  sessionStorage.clear()
+})

@@ -1,8 +1,10 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuthBootstrap } from '@/hooks/use-auth'
+import { useRouteScrollRestoration } from '@/hooks/use-route-scroll-restoration'
 import { useT } from '@/i18n/use-t'
 import { AppShell } from '@/components/layout/app-shell'
+import { PlaylistRunSafeguards } from '@/components/layout/playlist-run-safeguards'
 import { SpotifyOnlyRoute } from '@/components/layout/spotify-only-route'
 import { Spinner } from '@/components/ui/spinner'
 import { isAiCreationEnabled } from '@/lib/ai-creation'
@@ -56,38 +58,42 @@ const StatsPage = lazy(() =>
 
 export default function App() {
   useAuthBootstrap()
+  useRouteScrollRestoration()
 
   return (
-    <Suspense fallback={<RouteLoading />}>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/privacy" element={<PrivacyPage />} />
-        <Route path={SPOTIFY_ACCESS_PATH} element={<SpotifyAccessPage />} />
-        <Route path={APP_HOME_PATH} element={<AppShell />}>
-          <Route index element={<AppHomePage />} />
-          <Route path="mix" element={<MixPlaylistPage />} />
-          <Route path="discover" element={<DiscoverPlaylistPage />} />
-          {isAiCreationEnabled() ? (
-            <Route path="ai" element={<AiPlaylistPage />} />
-          ) : null}
-          <Route
-            element={
-              <SpotifyOnlyRoute capability="canUseLibrary" feature="library" />
-            }
-          >
-            <Route path="library" element={<LibraryPage />} />
+    <>
+      <Suspense fallback={<RouteLoading />}>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path={SPOTIFY_ACCESS_PATH} element={<SpotifyAccessPage />} />
+          <Route path={APP_HOME_PATH} element={<AppShell />}>
+            <Route index element={<AppHomePage />} />
+            <Route path="mix" element={<MixPlaylistPage />} />
+            <Route path="discover" element={<DiscoverPlaylistPage />} />
+            {isAiCreationEnabled() ? (
+              <Route path="ai" element={<AiPlaylistPage />} />
+            ) : null}
+            <Route
+              element={
+                <SpotifyOnlyRoute capability="canUseLibrary" feature="library" />
+              }
+            >
+              <Route path="library" element={<LibraryPage />} />
+            </Route>
+            <Route
+              element={
+                <SpotifyOnlyRoute capability="canUseStats" feature="stats" />
+              }
+            >
+              <Route path="stats" element={<StatsPage />} />
+            </Route>
           </Route>
-          <Route
-            element={
-              <SpotifyOnlyRoute capability="canUseStats" feature="stats" />
-            }
-          >
-            <Route path="stats" element={<StatsPage />} />
-          </Route>
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Suspense>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+      <PlaylistRunSafeguards />
+    </>
   )
 }
 

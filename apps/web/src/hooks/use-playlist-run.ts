@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import type { PlaylistTransferDto } from '@blendify/contracts'
 import type { GenerationProgress } from '@/lib/api'
 import type { GenerationOutcome } from '@/lib/playlist-generation'
 import {
@@ -23,10 +24,12 @@ export type PlaylistRunView = {
   result: GenerationOutcome | null
   progress: GenerationProgress | null
   failure: PlaylistRunFailure | null
+  preparedTransfer: PlaylistTransferDto | null
   start: (spec: PlaylistRunSpec) => boolean
   rerun: () => boolean
   recreateUncertain: () => boolean
   dismiss: () => void
+  attachTransfer: (transfer: PlaylistTransferDto) => void
 }
 
 export function usePlaylistRun(feature: PlaylistRunFeature): PlaylistRunView {
@@ -46,7 +49,11 @@ export function usePlaylistRun(feature: PlaylistRunFeature): PlaylistRunView {
   useEffect(
     () => () => {
       const { run: latest, discard: discardRun } = usePlaylistRunStore.getState()
-      if (latest?.spec.feature === feature && latest.spec.mode === 'guest') {
+      if (
+        latest?.spec.feature === feature &&
+        latest.spec.mode === 'guest' &&
+        latest.status.phase !== 'succeeded'
+      ) {
         discardRun()
       }
     },
@@ -63,6 +70,7 @@ export function usePlaylistRun(feature: PlaylistRunFeature): PlaylistRunView {
       status?.phase === 'failed' || status?.phase === 'uncertain'
         ? { error: status.error, isOutcomeUncertain: status.phase === 'uncertain' }
         : null,
+    preparedTransfer: status?.phase === 'succeeded' ? status.transfer : null,
     start: (spec) => startPlaylistRun(spec, queryClient),
     rerun: () => rerunPlaylistRun(queryClient),
     recreateUncertain: () => recreateUncertainPlaylistRun(queryClient),
@@ -70,6 +78,11 @@ export function usePlaylistRun(feature: PlaylistRunFeature): PlaylistRunView {
       const { run: latest, discard } = usePlaylistRunStore.getState()
       if (latest?.spec.feature === feature && latest.status.phase !== 'active') {
         discard()
+      }
+    },
+    attachTransfer: (transfer) => {
+      if (run) {
+        usePlaylistRunStore.getState().attachTransfer(run.id, transfer)
       }
     },
   }

@@ -50,6 +50,39 @@ test.describe('Guest bootstrap and shell', () => {
     ).toHaveCount(0)
   })
 
+  test('starts a pushed page at the top and restores the scroll position on back', async ({
+    page,
+  }) => {
+    await page.goto('/app/mix')
+    await expect(
+      page.getByRole('heading', { name: 'Create your mix' }),
+    ).toBeVisible()
+    await page.evaluate(() => window.scrollTo(0, 500))
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY))
+      .toBeGreaterThan(0)
+    const mixScroll = await page.evaluate(() => window.scrollY)
+
+    await page
+      .getByRole('navigation', { name: 'Main menu' })
+      .first()
+      .getByRole('link', { name: 'Discover' })
+      .click()
+
+    await expect(page).toHaveURL(/\/app\/discover$/)
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+    await expect(page.getByRole('main')).toBeFocused()
+
+    await page.goBack()
+
+    await expect(
+      page.getByRole('heading', { name: 'Create your mix' }),
+    ).toBeVisible()
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY))
+      .toBe(mixScroll)
+  })
+
   test('sends a direct visit to a protected route back to the app home with a Spotify notice', async ({
     page,
   }) => {

@@ -29,7 +29,7 @@ export function SpotifyAccessPage() {
         </Link>
         <LanguageSwitcher />
       </header>
-      <main className={cn(shellGutter, 'flex-1 pb-16')}>
+      <main tabIndex={-1} className={cn(shellGutter, 'flex-1 pb-16 outline-none')}>
         <article className="mx-auto w-full max-w-prose space-y-10">
           <header className="space-y-3">
             <h1 className="font-display text-3xl font-bold tracking-tight text-cream-50 sm:text-4xl">

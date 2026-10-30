@@ -23,6 +23,7 @@ type GenrePickerProps = Readonly<{
   max: number
   onToggle: (genre: Genre) => void
   onRemove: (id: string) => void
+  errorId?: string
   className?: string
 }>
 
@@ -245,6 +246,7 @@ export function GenrePicker({
   max,
   onToggle,
   onRemove,
+  errorId,
   className,
 }: GenrePickerProps) {
   const t = useT()
@@ -337,6 +339,8 @@ export function GenrePicker({
     <div className={cn('space-y-4', className)}>
       <SearchField
         value={query}
+        aria-invalid={errorId ? true : undefined}
+        aria-describedby={errorId}
         onChange={(value) => {
           setQuery(value)
           if (!value) {

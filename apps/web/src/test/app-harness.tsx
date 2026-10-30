@@ -1,6 +1,6 @@
 import { StrictMode, type ReactNode } from 'react'
 import { render } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { User } from '@/lib/api'
 import { useLocaleStore } from '@/i18n/use-locale'
@@ -107,13 +107,17 @@ export function renderWithProviders(
       mutations: { retry: false },
     },
   })
+  const router = createMemoryRouter([{ path: '*', element: ui }], {
+    initialEntries: [route],
+  })
   const tree = (
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   )
   return {
     queryClient,
+    router,
     ...render(strict ? <StrictMode>{tree}</StrictMode> : tree),
   }
 }

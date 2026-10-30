@@ -3,6 +3,7 @@ import {
   Suspense,
   useEffect,
   useId,
+  useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent,
@@ -20,7 +21,11 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react'
-import type { PlaylistStatus, PlaylistSummary } from '@blendify/contracts'
+import {
+  PLAYLIST_NAME_MAX_LENGTH,
+  type PlaylistStatus,
+  type PlaylistSummary,
+} from '@blendify/contracts'
 import { api } from '@/lib/api'
 import type { PendingLibraryConfirm } from '@/components/playlist/library-types'
 import {
@@ -28,6 +33,7 @@ import {
   libraryKindKey,
 } from '@/components/playlist/library-list-helpers'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { FieldError } from '@/components/ui/feedback'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { popoverSurfaceClass, usePopover } from '@/hooks/use-popover'
@@ -106,21 +112,29 @@ function LibraryItemRenameField({
   onSubmit,
   onCancel,
   saving,
+  error,
 }: Readonly<{
   nameDraft: string
   onDraftChange: (value: string) => void
   onSubmit: () => void
   onCancel: () => void
   saving: boolean
+  error: string | null
 }>) {
   const t = useT()
+  const errorId = useId()
   return (
     <div className="flex max-w-md flex-wrap gap-2">
       <Input
         value={nameDraft}
+        maxLength={PLAYLIST_NAME_MAX_LENGTH}
+        aria-label={t('library.nameLabel')}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
         onChange={(event) => onDraftChange(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === 'Enter') {
+          if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+            event.preventDefault()
             onSubmit()
           }
           if (event.key === 'Escape') {
@@ -132,9 +146,12 @@ function LibraryItemRenameField({
       <Button size="sm" loading={saving} onClick={onSubmit}>
         {t('library.save')}
       </Button>
-      <Button size="sm" variant="ghost" onClick={onCancel}>
+      <Button size="sm" variant="ghost" disabled={saving} onClick={onCancel}>
         {t('common.cancel')}
       </Button>
+      <FieldError id={errorId} role="alert" className="basis-full">
+        {error}
+      </FieldError>
     </div>
   )
 }
@@ -149,6 +166,7 @@ function LibraryItemMeta({
   onSubmitRename,
   onCancelRename,
   renamePending,
+  renameError,
 }: Readonly<{
   playlist: PlaylistSummary
   title: string
@@ -159,6 +177,7 @@ function LibraryItemMeta({
   onSubmitRename: () => void
   onCancelRename: () => void
   renamePending: boolean
+  renameError: string | null
 }>) {
   const t = useT()
   const locale = useLocaleStore((state) => state.locale)
@@ -183,6 +202,7 @@ function LibraryItemMeta({
           onSubmit={onSubmitRename}
           onCancel={onCancelRename}
           saving={renamePending}
+          error={renameError}
         />
       ) : (
         <h3
@@ -467,11 +487,15 @@ export function LibraryItem({
     queryFn: () => api.getPlaylist(playlist.id),
     enabled: previewOpen && canPreview && !selecting,
   })
+  const renameInFlight = useRef(false)
   const rename = useMutation({
     mutationFn: (name: string) => api.renamePlaylist(playlist.id, name),
     onSuccess: () => {
       finishRename()
       void queryClient.invalidateQueries({ queryKey: ['playlists'] })
+    },
+    onSettled: () => {
+      renameInFlight.current = false
     },
   })
 
@@ -480,13 +504,32 @@ export function LibraryItem({
     menu.triggerRef.current?.focus()
   }
 
+  function cancelRename() {
+    if (renameInFlight.current) {
+      return
+    }
+    rename.reset()
+    finishRename()
+  }
+
+  function changeNameDraft(value: string) {
+    setNameDraft(value)
+    if (rename.isError) {
+      rename.reset()
+    }
+  }
+
   function submitRename() {
+    if (renameInFlight.current) {
+      return
+    }
     const next = nameDraft.trim()
     if (!next || next === playlist.name) {
       finishRename()
       setNameDraft(playlist.name)
       return
     }
+    renameInFlight.current = true
     rename.mutate(next)
   }
 
@@ -509,10 +552,11 @@ export function LibraryItem({
       renaming={renaming}
       selecting={selecting}
       nameDraft={nameDraft}
-      onDraftChange={setNameDraft}
+      onDraftChange={changeNameDraft}
       onSubmitRename={submitRename}
-      onCancelRename={finishRename}
+      onCancelRename={cancelRename}
       renamePending={rename.isPending}
+      renameError={rename.isError ? t('library.renameError') : null}
     />
   )
 

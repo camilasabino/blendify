@@ -355,6 +355,115 @@ describe('MixPlaylistForm genre region', () => {
   })
 })
 
+describe('MixPlaylistForm artist search', () => {
+  it('does not start a generation when Enter is pressed in the artist search', async () => {
+    setAuthState(null)
+    const { calls } = stubApi({
+      'GET /api/artists/search': () =>
+        jsonResponse({
+          artists: [
+            { id: 'artist-1', name: 'Radiohead', imageUrl: null },
+            { id: 'artist-2', name: 'Portishead', imageUrl: null },
+          ],
+        }),
+      'POST /api/generate/mix': () =>
+        ndjsonResponse(progress, { type: 'result', playlist: guestPlaylist }),
+    })
+    renderWithProviders(<MixPlaylistForm />)
+    const user = userEvent.setup()
+
+    const search = screen.getByRole('combobox', { name: 'Artists' })
+    await user.type(search, 'Radiohead')
+    await user.click(
+      await screen.findByRole('option', { name: /Radiohead/ }, { timeout: 3_000 }),
+    )
+    expect(screen.getByRole('button', { name: 'Generate playlist' })).toBeEnabled()
+
+    await user.type(search, 'Portishead{Enter}')
+    await screen.findByRole('option', { name: /Portishead/ }, { timeout: 3_000 })
+    await user.keyboard('{Enter}')
+
+    expect(generationCalls(calls)).toHaveLength(0)
+    expect(search).toHaveValue('Portishead')
+  })
+})
+
+describe('MixPlaylistForm validation errors', () => {
+  it('announces a missing artist on the artist search until one is added', async () => {
+    setAuthState(null)
+    const { calls } = stubApi({
+      'GET /api/artists/search': () =>
+        jsonResponse({
+          artists: [{ id: 'artist-1', name: 'Radiohead', imageUrl: null }],
+        }),
+    })
+    renderWithProviders(<MixPlaylistForm />)
+    const user = userEvent.setup()
+
+    const submit = screen.getByRole('button', { name: 'Generate playlist' })
+    fireEvent.submit(submit.closest('form')!)
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Add at least one artist.')
+    const search = screen.getByRole('combobox', { name: 'Artists' })
+    expect(search).toHaveAttribute('aria-invalid', 'true')
+    expect(search).toHaveAccessibleDescription('Add at least one artist.')
+    expect(generationCalls(calls)).toHaveLength(0)
+
+    await user.type(search, 'Radiohead')
+    await user.click(
+      await screen.findByRole('option', { name: /Radiohead/ }, { timeout: 3_000 }),
+    )
+
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(search).not.toHaveAttribute('aria-invalid')
+    expect(search).not.toHaveAttribute('aria-describedby')
+  })
+
+  it('announces a missing genre on the genre search', async () => {
+    setAuthState(null)
+    stubGeneration()
+    renderWithProviders(<MixPlaylistForm />)
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('radio', { name: 'Genres' }))
+    const submit = screen.getByRole('button', { name: 'Generate playlist' })
+    fireEvent.submit(submit.closest('form')!)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Add at least one genre.',
+    )
+    const search = screen.getByRole('textbox', { name: 'Search genres…' })
+    expect(search).toHaveAttribute('aria-invalid', 'true')
+    expect(search).toHaveAccessibleDescription('Add at least one genre.')
+  })
+
+  it('announces a pasted list error on the paste field', async () => {
+    setAuthState(null)
+    const { calls } = stubApi({})
+    renderWithProviders(<MixPlaylistForm />)
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('button', { name: 'Paste a list of artists' }))
+    const paste = screen.getByRole('textbox', { name: 'Paste a list of artists' })
+    expect(paste).toHaveAccessibleDescription('One artist per line.')
+    await user.click(paste)
+    await user.paste(
+      Array.from({ length: 13 }, (_, index) => `Artist ${index}`).join('\n'),
+    )
+    await user.click(screen.getByRole('button', { name: 'Add artists' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'You can select up to 12 artists.',
+    )
+    expect(paste).toHaveAttribute('aria-invalid', 'true')
+    expect(paste).toHaveAccessibleDescription(
+      'You can select up to 12 artists. One artist per line.',
+    )
+    expect(calls.filter((call) => call.method === 'POST')).toHaveLength(0)
+  })
+})
+
 describe('MixPlaylistForm generation modes', () => {
   it('generates through the Guest endpoint without publication fields', async () => {
     setAuthState(null)
@@ -386,7 +495,7 @@ describe('MixPlaylistForm generation modes', () => {
     ).toBeVisible()
     expect(
       screen.getByText(
-        'This playlist is temporary. It will be lost if you leave this page or refresh it.',
+        'This playlist is temporary. It stays in this browser tab until you close the tab, create another playlist or connect Spotify.',
       ),
     ).toBeVisible()
     expect(screen.queryByRole('link', { name: 'Open in Spotify' })).toBeNull()

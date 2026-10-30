@@ -320,6 +320,7 @@ describe('Mix track-count slider', () => {
     await user.click(screen.getByRole('button', { name: 'Generate playlist' }))
     await screen.findByRole('heading', { name: 'Blendify · Mix · Jazz' })
     guest.unmount()
+    usePlaylistRunStore.getState().discard()
 
     setAuthState(testUser)
     renderWithProviders(<MixPlaylistForm />)

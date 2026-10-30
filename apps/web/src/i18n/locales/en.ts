@@ -380,6 +380,8 @@ export const en = {
   'library.statusPending': 'Creating…',
   'library.statusFailed': 'Couldn’t create',
   'library.save': 'Save',
+  'library.nameLabel': 'Playlist name',
+  'library.renameError': 'Couldn’t rename the playlist. Try again.',
   'common.cancel': 'Cancel',
   'common.loading': 'Loading…',
   'common.close': 'Close',
@@ -454,7 +456,7 @@ export const en = {
   'spotifyAccess.withoutTitle':
     'Without connecting Spotify',
   'spotifyAccess.withoutBody':
-    'You can create playlists in Blendify. They stay in this browser until you leave the page or refresh it, and you can prepare a transfer with Soundiiz. Song details still come from Spotify.',
+    'You can create playlists in Blendify. Each one stays in this browser tab until you close the tab or create another, and you can prepare a transfer with Soundiiz. Song details still come from Spotify.',
   'spotifyAccess.withTitle':
     'With Spotify connected',
   'spotifyAccess.withBody':
@@ -471,10 +473,15 @@ export const en = {
     '(opens in a new tab)',
   'create.leaveNoteGuest':
     'Keep this page open until the playlist is ready. Leaving stops it, and nothing is saved.',
+  'leaveGuard.title': 'Leave while your playlist is being generated?',
+  'leaveGuard.body':
+    'Leaving stops the generation, and this playlist won’t be saved.',
+  'leaveGuard.leave': 'Leave',
+  'leaveGuard.stay': 'Stay on this page',
   'create.recreateNoteGuest':
     'Changing these settings creates a new playlist that replaces the one shown here.',
   'guestResult.temporary':
-    'This playlist is temporary. It will be lost if you leave this page or refresh it.',
+    'This playlist is temporary. It stays in this browser tab until you close the tab, create another playlist or connect Spotify.',
   'attribution.lastfm':
     'Music recommendations powered by',
   'guestResult.attribution':

@@ -490,7 +490,7 @@ describe('GenerationResultPanel in Guest Mode', () => {
     expect(screen.queryByText(/saved to Spotify/)).toBeNull()
     expect(
       screen.getByText(
-        'This playlist is temporary. It will be lost if you leave this page or refresh it.',
+        'This playlist is temporary. It stays in this browser tab until you close the tab, create another playlist or connect Spotify.',
       ),
     ).toBeVisible()
   })

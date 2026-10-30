@@ -160,6 +160,7 @@ export function SearchCombobox<T extends { id: string }>({
   clearLabel,
   emptyLabel,
   errorLabel,
+  errorId,
   disabled,
   className,
 }: Readonly<{
@@ -176,6 +177,7 @@ export function SearchCombobox<T extends { id: string }>({
   clearLabel: string
   emptyLabel: string
   errorLabel: (error: unknown) => string
+  errorId?: string
   disabled?: boolean
   className?: string
 }>) {
@@ -276,8 +278,11 @@ export function SearchCombobox<T extends { id: string }>({
       }
       return
     }
-    if (event.key === 'Enter' && showOptions && activeIndex >= 0) {
-      event.preventDefault()
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
+      return
+    }
+    event.preventDefault()
+    if (showOptions && activeIndex >= 0) {
       const item = items[activeIndex]
       if (item) {
         select(item)
@@ -329,6 +334,8 @@ export function SearchCombobox<T extends { id: string }>({
           className={cn('pl-9', query ? 'pr-9' : undefined)}
           aria-label={inputId ? undefined : (label ?? placeholder)}
           aria-autocomplete="list"
+          aria-invalid={errorId ? true : undefined}
+          aria-describedby={errorId}
           aria-controls={showPopup ? listId : undefined}
           aria-expanded={showOptions}
           aria-activedescendant={

@@ -1,10 +1,11 @@
 import { useEffect, useId, useRef } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, type MutationKey } from '@tanstack/react-query'
 import { ArrowRightLeft, ExternalLink, RotateCcw } from 'lucide-react'
 import type {
   PlaylistTransferDto,
   PlaylistTransferOfferDto,
 } from '@blendify/contracts'
+import { GUEST_TRANSFER_MUTATION_KEY } from '@/components/playlist/generation-result-helpers'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
   api,
@@ -49,14 +50,21 @@ function TransferFailure({
 
 export function TransferAction({
   offer,
+  preparedTransfer,
+  onPrepared,
   onRegenerate,
 }: Readonly<{
   offer: PlaylistTransferOfferDto
+  preparedTransfer?: PlaylistTransferDto | null
+  onPrepared?: (transfer: PlaylistTransferDto) => void
   onRegenerate: () => void
 }>) {
   return (
     <SoundiizTransfer
       prepare={() => api.createTransfer(offer.token)}
+      preparedTransfer={preparedTransfer}
+      mutationKey={GUEST_TRANSFER_MUTATION_KEY}
+      onPrepared={onPrepared}
       onRegenerate={onRegenerate}
     />
   )
@@ -65,10 +73,14 @@ export function TransferAction({
 export function SoundiizTransfer({
   prepare,
   preparedTransfer = null,
+  mutationKey,
+  onPrepared,
   onRegenerate,
 }: Readonly<{
   prepare: () => Promise<PlaylistTransferDto>
   preparedTransfer?: PlaylistTransferDto | null
+  mutationKey?: MutationKey
+  onPrepared?: (transfer: PlaylistTransferDto) => void
   onRegenerate?: () => void
 }>) {
   const t = useT()
@@ -78,7 +90,9 @@ export function SoundiizTransfer({
   const continueRef = useRef<HTMLAnchorElement>(null)
   const isRequesting = useRef(false)
   const transferMutation = useMutation({
+    mutationKey,
     mutationFn: prepare,
+    onSuccess: onPrepared,
     onSettled: () => {
       isRequesting.current = false
     },

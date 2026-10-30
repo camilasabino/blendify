@@ -388,6 +388,8 @@ export const es: Record<MessageKey, string> = {
   'library.statusPending': 'Creando…',
   'library.statusFailed': 'No se pudo crear',
   'library.save': 'Guardar',
+  'library.nameLabel': 'Nombre de la playlist',
+  'library.renameError': 'No se pudo renombrar la playlist. Inténtalo nuevamente.',
   'common.cancel': 'Cancelar',
   'common.loading': 'Cargando…',
   'common.close': 'Cerrar',
@@ -462,7 +464,7 @@ export const es: Record<MessageKey, string> = {
   'spotifyAccess.withoutTitle':
     'Sin conectar Spotify',
   'spotifyAccess.withoutBody':
-    'Puedes crear playlists en Blendify. Permanecen en este navegador hasta que sales de la página o la recargas, y puedes preparar una transferencia con Soundiiz. Los datos de las canciones siguen viniendo de Spotify.',
+    'Puedes crear playlists en Blendify. Cada una se conserva en esta pestaña del navegador hasta que la cierres o crees otra, y puedes preparar una transferencia con Soundiiz. Los datos de las canciones siguen viniendo de Spotify.',
   'spotifyAccess.withTitle':
     'Con Spotify conectado',
   'spotifyAccess.withBody':
@@ -479,10 +481,15 @@ export const es: Record<MessageKey, string> = {
     '(se abre en una pestaña nueva)',
   'create.leaveNoteGuest':
     'Mantén esta página abierta hasta que la playlist esté lista. Si sales, se detiene y no se guarda nada.',
+  'leaveGuard.title': '¿Salir mientras se genera tu playlist?',
+  'leaveGuard.body':
+    'Si sales, la generación se detiene y esta playlist no se guarda.',
+  'leaveGuard.leave': 'Salir',
+  'leaveGuard.stay': 'Quedarme en esta página',
   'create.recreateNoteGuest':
     'Si cambias esta configuración, se crea una playlist nueva que reemplaza la que ves aquí.',
   'guestResult.temporary':
-    'Esta playlist es temporal. Se perderá si sales de esta página o la recargas.',
+    'Esta playlist es temporal. Se conserva en esta pestaña del navegador hasta que la cierres, crees otra playlist o conectes Spotify.',
   'attribution.lastfm':
     'Recomendaciones musicales con tecnología de',
   'guestResult.attribution':

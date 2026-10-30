@@ -77,7 +77,10 @@ export function LandingPage() {
         </div>
       ) : null}
 
-      <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-4 pb-16 pt-4 sm:px-6 lg:flex-row lg:items-center lg:gap-16">
+      <main
+        tabIndex={-1}
+        className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-4 pb-16 pt-4 outline-none sm:px-6 lg:flex-row lg:items-center lg:gap-16"
+      >
         <div className="max-w-xl flex-1 space-y-6">
           <h1 className="animate-fade-up font-display text-5xl font-extrabold leading-[0.95] tracking-tight text-cream-50 min-[400px]:text-6xl sm:text-7xl lg:text-8xl">
             Blendify

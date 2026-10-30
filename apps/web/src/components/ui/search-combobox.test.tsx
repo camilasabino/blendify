@@ -5,31 +5,44 @@ import { SearchCombobox } from './search-combobox'
 
 function renderCombobox({
   onSelect = vi.fn(),
+  onSubmit = vi.fn(),
   selectedIds = new Set<string>(),
-}: Readonly<{ onSelect?: () => void; selectedIds?: Set<string> }> = {}) {
+}: Readonly<{
+  onSelect?: () => void
+  onSubmit?: () => void
+  selectedIds?: Set<string>
+}> = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
 
   render(
     <QueryClientProvider client={queryClient}>
-      <label htmlFor="artist-search">Artists</label>
-      <SearchCombobox
-        queryKey="test"
-        search={async () => [
-          { id: 'one', name: 'First' },
-          { id: 'two', name: 'Second' },
-        ]}
-        selectedIds={selectedIds}
-        onSelect={onSelect}
-        renderOption={(item) => item.name}
-        inputId="artist-search"
-        resultsLabel="Artist results"
-        placeholder="Search"
-        clearLabel="Clear"
-        emptyLabel="No results"
-        errorLabel={() => 'Failed'}
-      />
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          onSubmit()
+        }}
+      >
+        <label htmlFor="artist-search">Artists</label>
+        <SearchCombobox
+          queryKey="test"
+          search={async () => [
+            { id: 'one', name: 'First' },
+            { id: 'two', name: 'Second' },
+          ]}
+          selectedIds={selectedIds}
+          onSelect={onSelect}
+          renderOption={(item) => item.name}
+          inputId="artist-search"
+          resultsLabel="Artist results"
+          placeholder="Search"
+          clearLabel="Clear"
+          emptyLabel="No results"
+          errorLabel={() => 'Failed'}
+        />
+        <button type="submit">Create</button>
+      </form>
     </QueryClientProvider>,
   )
 }
@@ -66,7 +79,8 @@ describe('SearchCombobox', () => {
   it('selects search results with the keyboard', async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
-    renderCombobox({ onSelect })
+    const onSubmit = vi.fn()
+    renderCombobox({ onSelect, onSubmit })
 
     const input = screen.getByRole('combobox', { name: 'Artists' })
     await user.type(input, 'ab')
@@ -80,6 +94,25 @@ describe('SearchCombobox', () => {
     await user.keyboard('{Enter}')
 
     expect(onSelect).toHaveBeenCalledWith({ id: 'one', name: 'First' })
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('never submits the surrounding form with Enter', async () => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+    const onSubmit = vi.fn()
+    renderCombobox({ onSelect, onSubmit })
+
+    const input = screen.getByRole('combobox', { name: 'Artists' })
+    await user.click(input)
+    await user.keyboard('{Enter}')
+    await user.type(input, 'ab{Enter}')
+    await screen.findByRole('option', { name: 'First' })
+    await user.keyboard('{Enter}')
+
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(input).toHaveValue('ab')
   })
 
   it('closes the results with Escape', async () => {

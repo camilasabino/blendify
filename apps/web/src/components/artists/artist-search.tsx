@@ -6,6 +6,7 @@ import { useT } from '@/i18n/use-t'
 type ArtistSearchProps = Readonly<{
   selectedIds: Set<string>
   inputId?: string
+  errorId?: string
   onSelect: (artist: Artist) => void
   disabled?: boolean
   className?: string
@@ -21,6 +22,7 @@ export function ArtistSearch(props: ArtistSearchProps) {
       selectedIds={props.selectedIds}
       onSelect={props.onSelect}
       inputId={props.inputId}
+      errorId={props.errorId}
       placeholder={t('search.placeholder')}
       resultsLabel={t('search.artistResults')}
       clearLabel={t('search.clear')}

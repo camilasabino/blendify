@@ -1,6 +1,6 @@
 import type { Locale } from '@/i18n/messages'
 
-export const PRIVACY_POLICY_UPDATED = '2026-09-28'
+export const PRIVACY_POLICY_UPDATED = '2026-10-30'
 export const PRIVACY_CONTACT_EMAIL = 'contacto@camilasabino.dev'
 
 export const SPOTIFY_APPS_URL = 'https://www.spotify.com/account/apps/'
@@ -51,7 +51,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
       {
         title: 'Using Blendify without signing in',
         body: [
-          'You can search the catalog and generate playlists without connecting a Spotify account. Blendify does not create an account for you, and the playlists you generate this way are not kept as account or database data: they live in your browser tab until you leave or reload the page. Short-lived request counters do exist, and they are described below.',
+          'You can search the catalog and generate playlists without connecting a Spotify account. Blendify does not create an account for you, and the playlists you generate this way are not kept as account or database data: they live in your browser tab, as described under browser storage below, until you close the tab, create another one or connect Spotify. Short-lived request counters do exist, and they are described below.',
           'To build them, the Blendify server sends the artist, track and genre names involved to Spotify and Last.fm as ordinary catalog lookups. Those requests carry no identifier for you.',
           'To keep the service available, Blendify counts requests per client. Your IP address is the key for those counters in its cache; each counter expires on its own, at most about ten minutes after the last request it counted, and that cache keeps nothing on disk. Application logs record a short one-way hash of the key rather than the address.',
         ],
@@ -90,6 +90,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
             'oauth_state — a cookie that lasts 10 minutes and protects the Spotify sign-in against tampering.',
             'Your language choice and your “save to library” preference are stored by your browser on your device only.',
             'When you use Create with AI, the tab’s session storage keeps a reference to your session, your first request and the playlist title you edit. It is cleared when you close the tab, start over or log out; the text of the changes you ask for is not stored there.',
+            'When you generate a playlist without connecting Spotify, the tab’s session storage keeps that playlist, the settings used to generate it and, if you prepare one, the Soundiiz transfer link, so a reload does not lose it. It holds no account or session information and is cleared when you close the tab, create another playlist or connect Spotify.',
           ],
           'Blendify sets no advertising cookies and runs no behavioral tracking system of its own. Site usage and page performance are measured through Cloudflare Web Analytics, which does not use cookies for that.',
         ],
@@ -160,7 +161,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
       {
         title: 'Usar Blendify sin iniciar sesión',
         body: [
-          'Puedes buscar en el catálogo y generar playlists sin conectar una cuenta de Spotify. Blendify no te crea una cuenta y las playlists que generas así no se conservan como datos de cuenta ni de base de datos: existen en la pestaña de tu navegador hasta que sales de la página o la recargas. Sí existen contadores de solicitudes de corta duración, descritos más abajo.',
+          'Puedes buscar en el catálogo y generar playlists sin conectar una cuenta de Spotify. Blendify no te crea una cuenta y las playlists que generas así no se conservan como datos de cuenta ni de base de datos: existen en la pestaña de tu navegador, como se describe más abajo en el almacenamiento del navegador, hasta que cierras la pestaña, creas otra o conectas Spotify. Sí existen contadores de solicitudes de corta duración, descritos más abajo.',
           'Para armarlas, el servidor de Blendify envía a Spotify y a Last.fm los nombres de artistas, canciones y géneros involucrados, como consultas normales de catálogo. Esas consultas no llevan ningún identificador tuyo.',
           'Para mantener el servicio disponible, Blendify cuenta las solicitudes por cliente. Tu dirección IP es la clave de esos contadores en su caché; cada contador expira por sí solo, a más tardar unos diez minutos después de la última solicitud que contó, y esa caché no guarda nada en disco. Los logs de la aplicación registran un hash corto e irreversible de la clave, no la dirección.',
         ],
@@ -199,6 +200,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
             'oauth_state: cookie que dura 10 minutos y protege el inicio de sesión con Spotify contra manipulaciones.',
             'Tu idioma y tu preferencia de “guardar en la biblioteca” los almacena tu navegador, solo en tu dispositivo.',
             'Cuando usas Crear con IA, el almacenamiento de sesión de la pestaña guarda una referencia a tu sesión, tu primer pedido y el título de playlist que editas. Se borra al cerrar la pestaña, empezar de nuevo o cerrar sesión; el texto de los cambios que pides no se guarda ahí.',
+            'Cuando generas una playlist sin conectar Spotify, el almacenamiento de sesión de la pestaña guarda esa playlist, la configuración usada para generarla y, si preparas una, el enlace de transferencia de Soundiiz, para que una recarga no la pierda. No contiene información de cuenta ni de sesión y se borra al cerrar la pestaña, crear otra playlist o conectar Spotify.',
           ],
           'Blendify no usa cookies de publicidad ni un sistema propio de rastreo de comportamiento. El uso del sitio y el rendimiento de las páginas se miden con Cloudflare Web Analytics, que para eso no usa cookies.',
         ],
@@ -269,7 +271,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
       {
         title: 'Usar o Blendify sem entrar',
         body: [
-          'Você pode pesquisar o catálogo e gerar playlists sem conectar uma conta do Spotify. O Blendify não cria uma conta para você, e as playlists que você gera assim não são guardadas como dados de conta nem de banco de dados: elas existem na aba do seu navegador até você sair da página ou recarregá-la. Contadores de requisições de curta duração existem, sim, e estão descritos abaixo.',
+          'Você pode pesquisar o catálogo e gerar playlists sem conectar uma conta do Spotify. O Blendify não cria uma conta para você, e as playlists que você gera assim não são guardadas como dados de conta nem de banco de dados: elas existem na aba do seu navegador, como descrito abaixo em armazenamento do navegador, até você fechar a aba, criar outra ou conectar o Spotify. Contadores de requisições de curta duração existem, sim, e estão descritos abaixo.',
           'Para montá-las, o servidor do Blendify envia ao Spotify e ao Last.fm os nomes de artistas, músicas e gêneros envolvidos, como consultas comuns de catálogo. Essas consultas não levam nenhum identificador seu.',
           'Para manter o serviço disponível, o Blendify conta as requisições por cliente. Seu endereço IP é a chave desses contadores no cache; cada contador expira sozinho, no máximo cerca de dez minutos depois da última requisição que contou, e esse cache não guarda nada em disco. Os logs da aplicação registram um hash curto e irreversível da chave, não o endereço.',
         ],
@@ -308,6 +310,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
             'oauth_state: cookie que dura 10 minutos e protege o login com o Spotify contra manipulação.',
             'Seu idioma e sua preferência de “salvar na biblioteca” são guardados pelo seu navegador, somente no seu dispositivo.',
             'Quando você usa o Criar com IA, o armazenamento de sessão da aba guarda uma referência à sua sessão, seu primeiro pedido e o título de playlist que você edita. Ele é apagado quando você fecha a aba, recomeça ou sai da conta; o texto das mudanças que você pede não é guardado ali.',
+            'Quando você gera uma playlist sem conectar o Spotify, o armazenamento de sessão da aba guarda essa playlist, as configurações usadas para gerá-la e, se você preparar uma, o link de transferência do Soundiiz, para que recarregar a página não a perca. Ele não contém informações de conta nem de sessão e é apagado quando você fecha a aba, cria outra playlist ou conecta o Spotify.',
           ],
           'O Blendify não usa cookies de publicidade nem um sistema próprio de rastreamento de comportamento. O uso do site e o desempenho das páginas são medidos com o Cloudflare Web Analytics, que para isso não usa cookies.',
         ],

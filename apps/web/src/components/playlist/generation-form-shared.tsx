@@ -137,6 +137,7 @@ export function GenerationSubmitBar({
   isGenerating,
   disabledReason,
   error,
+  errorId,
   idleLabel,
   busyLabel,
   summary,
@@ -145,6 +146,7 @@ export function GenerationSubmitBar({
   isGenerating: boolean
   disabledReason: string | null
   error: string | null
+  errorId?: string
   idleLabel: string
   busyLabel: string
   summary?: string | null
@@ -164,7 +166,9 @@ export function GenerationSubmitBar({
 
   return (
     <div className="space-y-3 pt-2">
-      {error ? <FieldError>{error}</FieldError> : null}
+      <FieldError id={errorId} role="alert">
+        {error}
+      </FieldError>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
         <Button
           type="submit"

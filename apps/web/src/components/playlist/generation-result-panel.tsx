@@ -16,6 +16,7 @@ import type {
   GeneratedPlaylistDto,
   GenerationProgress,
   PlaylistDetail,
+  PlaylistTransferDto,
 } from '@blendify/contracts'
 import { LastFmAttribution } from '@/components/brand/lastfm-attribution'
 import { SpotifyLimitExplanation } from '@/components/brand/spotify-limit-explanation'
@@ -464,6 +465,8 @@ function GuestReadyResult({
   outcome,
   playlist,
   requestedTrackCount,
+  preparedTransfer,
+  onTransferPrepared,
   onRegenerate,
   onAdjust,
   onCreateAnother,
@@ -471,6 +474,8 @@ function GuestReadyResult({
   outcome: GenerationOutcome
   playlist: GeneratedPlaylistDto
   requestedTrackCount: number
+  preparedTransfer: PlaylistTransferDto | null
+  onTransferPrepared?: (transfer: PlaylistTransferDto) => void
   onRegenerate: () => void
   onAdjust: () => void
   onCreateAnother: () => void
@@ -519,6 +524,8 @@ function GuestReadyResult({
           <TransferAction
             key={playlist.transfer.token}
             offer={playlist.transfer}
+            preparedTransfer={preparedTransfer}
+            onPrepared={onTransferPrepared}
             onRegenerate={onRegenerate}
           />
         ) : null}
@@ -536,6 +543,8 @@ function GuestReadyResult({
 function ResultBody({
   outcome,
   requestedTrackCount,
+  preparedTransfer,
+  onTransferPrepared,
   copied,
   onCopy,
   onRetry,
@@ -544,6 +553,8 @@ function ResultBody({
 }: Readonly<{
   outcome: GenerationOutcome
   requestedTrackCount: number
+  preparedTransfer: PlaylistTransferDto | null
+  onTransferPrepared?: (transfer: PlaylistTransferDto) => void
   copied: boolean
   onCopy: (url: string) => void
   onRetry: () => void
@@ -556,6 +567,8 @@ function ResultBody({
         outcome={outcome}
         playlist={outcome.playlist}
         requestedTrackCount={requestedTrackCount}
+        preparedTransfer={preparedTransfer}
+        onTransferPrepared={onTransferPrepared}
         onRegenerate={onRetry}
         onAdjust={onAdjust}
         onCreateAnother={onCreateAnother}
@@ -586,6 +599,8 @@ export function GenerationResultPanel({
   workingTitleKey,
   workingHintKey,
   requestStarted = false,
+  preparedTransfer = null,
+  onTransferPrepared,
   copied,
   onCopy,
   onRetry,
@@ -603,6 +618,8 @@ export function GenerationResultPanel({
   workingTitleKey: MessageKey
   workingHintKey: MessageKey
   requestStarted?: boolean
+  preparedTransfer?: PlaylistTransferDto | null
+  onTransferPrepared?: (transfer: PlaylistTransferDto) => void
   copied: boolean
   onCopy: (url: string) => void
   onRetry: () => void
@@ -679,6 +696,8 @@ export function GenerationResultPanel({
         <ResultBody
           outcome={result}
           requestedTrackCount={requestedTrackCount}
+          preparedTransfer={preparedTransfer}
+          onTransferPrepared={onTransferPrepared}
           copied={copied}
           onCopy={onCopy}
           onRetry={onRetry}

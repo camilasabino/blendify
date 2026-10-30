@@ -182,6 +182,7 @@ function mixDisabledReason(
 function MixArtistSource({
   artists,
   artistSearchId,
+  seedErrorId,
   selectedIds,
   onAddArtist,
   onRemoveArtist,
@@ -191,6 +192,7 @@ function MixArtistSource({
   pasteId,
   pasteRegionId,
   pasteHintId,
+  pasteErrorId,
   pasteList,
   onPasteChange,
   onResolve,
@@ -200,6 +202,7 @@ function MixArtistSource({
 }: Readonly<{
   artists: Artist[]
   artistSearchId: string
+  seedErrorId?: string
   selectedIds: Set<string>
   onAddArtist: (artist: Artist) => void
   onRemoveArtist: (id: string) => void
@@ -209,6 +212,7 @@ function MixArtistSource({
   pasteId: string
   pasteRegionId: string
   pasteHintId: string
+  pasteErrorId: string
   pasteList: string
   onPasteChange: (value: string) => void
   onResolve: () => void
@@ -228,6 +232,7 @@ function MixArtistSource({
       />
       <ArtistSearch
         inputId={artistSearchId}
+        errorId={seedErrorId}
         selectedIds={selectedIds}
         onSelect={onAddArtist}
         disabled={artists.length >= MAX_ARTISTS}
@@ -274,7 +279,10 @@ function MixArtistSource({
             placeholder={t('create.pastePlaceholder')}
             value={pasteList}
             onChange={(e) => onPasteChange(e.target.value)}
-            aria-describedby={pasteHintId}
+            aria-invalid={resolveError ? true : undefined}
+            aria-describedby={
+              resolveError ? `${pasteErrorId} ${pasteHintId}` : pasteHintId
+            }
             rows={4}
           />
           <p id={pasteHintId} className="text-xs text-cream-400">
@@ -291,7 +299,9 @@ function MixArtistSource({
               {!resolvePending ? <Music2 aria-hidden className="size-4" /> : null}
               {t('create.resolve')}
             </Button>
-            <FieldError>{resolveError}</FieldError>
+            <FieldError id={pasteErrorId} role="alert">
+              {resolveError}
+            </FieldError>
           </div>
         </div>
       </div>
@@ -301,12 +311,14 @@ function MixArtistSource({
 
 function MixGenreSource({
   genres,
+  seedErrorId,
   onToggleGenre,
   onRemoveGenre,
   onClearGenres,
   t,
 }: Readonly<{
   genres: Genre[]
+  seedErrorId?: string
   onToggleGenre: (genre: Genre) => void
   onRemoveGenre: (id: string) => void
   onClearGenres: () => void
@@ -326,6 +338,7 @@ function MixGenreSource({
         max={MAX_GENRES}
         onToggle={onToggleGenre}
         onRemove={onRemoveGenre}
+        errorId={seedErrorId}
       />
     </div>
   )
@@ -357,6 +370,8 @@ export function MixPlaylistForm() {
   const pasteId = useId()
   const pasteRegionId = useId()
   const pasteHintId = useId()
+  const pasteErrorId = useId()
+  const rootErrorId = useId()
 
   const artistTrackMax = maxTracksPerArtist(artists.length)
   const genreTrackMax = maxTracksPerGenre(genres.length)
@@ -457,6 +472,7 @@ export function MixPlaylistForm() {
       })
       setPasteList('')
       setPasteOpen(false)
+      form.clearErrors('root')
     },
     onError: (error) => {
       setResolveError(
@@ -479,6 +495,7 @@ export function MixPlaylistForm() {
       }
       return [...prev, artist]
     })
+    form.clearErrors('root')
   }
 
   function removeArtist(id: string) {
@@ -495,6 +512,7 @@ export function MixPlaylistForm() {
       }
       return [...prev, genre]
     })
+    form.clearErrors('root')
   }
 
   function removeGenre(id: string) {
@@ -688,6 +706,7 @@ export function MixPlaylistForm() {
     'mix',
   )
   const coverError = runCoverError(spec?.coverFailed, result, t)
+  const rootError = form.formState.errors.root?.message ?? null
   let disabledReason: string | null = t('common.loading')
   if (capabilities.isResolved) {
     disabledReason = playlistRun.busyFeature
@@ -722,6 +741,8 @@ export function MixPlaylistForm() {
           workingTitleKey={workingCopy.workingTitle}
           workingHintKey={workingCopy.workingHint}
           requestStarted={playlistRun.isActive}
+          preparedTransfer={playlistRun.preparedTransfer}
+          onTransferPrepared={playlistRun.attachTransfer}
           copied={copiedLink.copied}
           onCopy={(url) => void copiedLink.copy(url)}
           onRetry={() => void playlistRun.rerun()}
@@ -772,6 +793,7 @@ export function MixPlaylistForm() {
                 <MixArtistSource
                   artists={artists}
                   artistSearchId={artistSearchId}
+                  seedErrorId={rootError ? rootErrorId : undefined}
                   selectedIds={selectedIds}
                   onAddArtist={addArtist}
                   onRemoveArtist={removeArtist}
@@ -781,6 +803,7 @@ export function MixPlaylistForm() {
                   pasteId={pasteId}
                   pasteRegionId={pasteRegionId}
                   pasteHintId={pasteHintId}
+                  pasteErrorId={pasteErrorId}
                   pasteList={pasteList}
                   onPasteChange={setPasteList}
                   onResolve={handleResolve}
@@ -791,6 +814,7 @@ export function MixPlaylistForm() {
               ) : (
                 <MixGenreSource
                   genres={genres}
+                  seedErrorId={rootError ? rootErrorId : undefined}
                   onToggleGenre={toggleGenre}
                   onRemoveGenre={removeGenre}
                   onClearGenres={() => setGenres([])}
@@ -867,7 +891,8 @@ export function MixPlaylistForm() {
           <GenerationSubmitBar
             isGenerating={isGenerating}
             disabledReason={disabledReason}
-            error={form.formState.errors.root?.message ?? null}
+            error={rootError}
+            errorId={rootErrorId}
             idleLabel={result ? t(formCopy.generateNew) : t(formCopy.generate)}
             busyLabel={t(formCopy.generating)}
             summary={estimateSummary}

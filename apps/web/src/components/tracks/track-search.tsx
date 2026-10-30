@@ -8,6 +8,7 @@ import { formatCreditedArtists, formatDuration } from '@/lib/utils'
 type TrackSearchProps = Readonly<{
   selectedIds: Set<string>
   inputId?: string
+  errorId?: string
   onSelect: (track: TrackDto) => void
   disabled?: boolean
   className?: string
@@ -23,6 +24,7 @@ export function TrackSearch(props: TrackSearchProps) {
       selectedIds={props.selectedIds}
       onSelect={props.onSelect}
       inputId={props.inputId}
+      errorId={props.errorId}
       placeholder={t('search.trackPlaceholder')}
       resultsLabel={t('search.trackResults')}
       clearLabel={t('search.clear')}

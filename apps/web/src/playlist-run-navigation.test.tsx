@@ -1,10 +1,11 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useLocation } from 'react-router-dom'
 import App from '@/App'
 import {
   cleanSyncResult,
   emptyLibraryPage,
+  guestJazzPlaylist,
   spotifyJazzPlaylist,
 } from '@/test/playlist-fixtures'
 import {
@@ -387,30 +388,128 @@ describe('Spotify Discover generation across navigation', () => {
 })
 
 describe('Guest generation across navigation', () => {
-  it('is discarded when leaving the page instead of surviving in the shell', async () => {
-    setAuthState(null)
-    const user = userEvent.setup()
-    const { streams } = stubSpotifyApi({
+  function stubGuestApi() {
+    const { streams, ...api } = stubSpotifyApi({
+      'GET /api/auth/me': () => jsonResponse({ user: null }),
       'POST /api/generate/mix': (_call, signal) => {
         const stream = pendingNdjsonResponse(signal)
         streams.push(stream)
         return stream.response
       },
     })
-    renderApp('/app/mix')
+    return { ...api, streams }
+  }
 
+  async function startGuestJazzMix(user: ReturnType<typeof userEvent.setup>) {
     await user.click(await screen.findByRole('radio', { name: 'Genres' }))
     await user.click(await screen.findByRole('button', { name: /Jazz/ }))
     await user.click(screen.getByRole('button', { name: 'Generate playlist' }))
     await screen.findByText('Generating your playlist')
+  }
+
+  function leaveDialog() {
+    return screen.getByRole('dialog', {
+      name: 'Leave while your playlist is being generated?',
+    })
+  }
+
+  beforeEach(() => {
+    setAuthState(null)
+  })
+
+  it('asks before leaving an active generation and keeps it when the listener stays', async () => {
+    const user = userEvent.setup()
+    const { streams } = stubGuestApi()
+    renderApp('/app/mix')
+    await startGuestJazzMix(user)
 
     await goTo(user, 'Discover')
 
+    expect(leaveDialog()).toBeVisible()
+    expect(screen.getByTestId('location')).toHaveTextContent('/app/mix')
+    await user.click(screen.getByRole('button', { name: 'Stay on this page' }))
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByTestId('location')).toHaveTextContent('/app/mix')
+    expect(screen.getByText('Generating your playlist')).toBeInTheDocument()
+    expect(streams[0].signal?.aborted).toBe(false)
+  })
+
+  it('stops the generation only after the listener confirms leaving', async () => {
+    const user = userEvent.setup()
+    const { streams } = stubGuestApi()
+    renderApp('/app/mix')
+    await startGuestJazzMix(user)
+
+    await goTo(user, 'Discover')
+    await user.click(screen.getByRole('button', { name: 'Leave' }))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent('/app/discover'),
+    )
     expect(screen.queryByRole('region', { name: 'Playlist creation' })).toBeNull()
     expect(streams[0].signal?.aborted).toBe(true)
 
     await goTo(user, 'Mix')
+    expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByText('Generating your playlist')).toBeNull()
     expect(screen.getByRole('button', { name: 'Generate playlist' })).toBeInTheDocument()
+  })
+
+  it('also asks before a browser back navigation', async () => {
+    const user = userEvent.setup()
+    const { streams } = stubGuestApi()
+    const { router } = renderWithProviders(
+      <>
+        <App />
+        <LocationProbe />
+      </>,
+      { route: '/app' },
+    )
+    await act(() => router.navigate('/app/mix'))
+    await startGuestJazzMix(user)
+
+    await act(() => router.navigate(-1))
+
+    expect(leaveDialog()).toBeVisible()
+    expect(screen.getByTestId('location')).toHaveTextContent('/app/mix')
+    await user.click(screen.getByRole('button', { name: 'Stay on this page' }))
+    expect(streams[0].signal?.aborted).toBe(false)
+  })
+
+  it('keeps a finished result across in-app navigation without asking or generating again', async () => {
+    const user = userEvent.setup()
+    const { streams, calls } = stubGuestApi()
+    renderApp('/app/mix')
+    await startGuestJazzMix(user)
+    streams[0].push({ type: 'result', playlist: guestJazzPlaylist })
+    streams[0].close()
+    await screen.findByRole('heading', { name: 'Blendify · Mix · Jazz' })
+
+    await goTo(user, 'Discover')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByTestId('location')).toHaveTextContent('/app/discover')
+    expect(screen.queryByRole('region', { name: 'Playlist creation' })).toBeNull()
+
+    await goTo(user, 'Mix')
+    expect(
+      await screen.findByRole('heading', { name: 'Blendify · Mix · Jazz' }),
+    ).toBeVisible()
+    expect(
+      calls.filter((call) => call.url === '/api/generate/mix'),
+    ).toHaveLength(1)
+  })
+
+  it('does not ask before leaving while a Spotify run continues in the shell', async () => {
+    setAuthState(testUser)
+    const user = userEvent.setup()
+    stubSpotifyApi()
+    renderApp('/app/mix')
+    await startJazzMix(user)
+
+    await goTo(user, 'Library')
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByTestId('location')).toHaveTextContent('/app/library')
   })
 })

@@ -151,4 +151,35 @@ describe('playlist run store', () => {
     store().markSeen(id + 1)
     expect(store().run?.seen).toBe(true)
   })
+
+  it('restores a finished run as already seen, only when no run exists', () => {
+    expect(store().restore(spec, outcome, null)).toBe(true)
+    expect(store().run).toMatchObject({
+      spec,
+      seen: true,
+      status: { phase: 'succeeded', outcome, transfer: null },
+    })
+
+    expect(store().restore(discoverSpec, outcome, null)).toBe(false)
+    expect(store().run?.spec.feature).toBe('mix')
+  })
+
+  it('attaches a prepared transfer only to the same finished run', () => {
+    const transfer = {
+      url: 'https://soundiiz.com/go/import-playlist/abcdefghijklmnop',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      trackCount: 1,
+    }
+    const { id } = store().begin(spec)!
+
+    store().attachTransfer(id, transfer)
+    expect(store().run?.status.phase).toBe('active')
+
+    store().succeed(id, outcome)
+    store().attachTransfer(id + 1, transfer)
+    expect(store().run?.status).toMatchObject({ transfer: null })
+
+    store().attachTransfer(id, transfer)
+    expect(store().run?.status).toMatchObject({ transfer })
+  })
 })

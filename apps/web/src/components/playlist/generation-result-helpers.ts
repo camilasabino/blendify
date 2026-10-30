@@ -11,6 +11,8 @@ import {
 } from '@/lib/generation-failure'
 import { toSafeHttpsUrl, toSpotifyUrl } from '@/lib/utils'
 
+export const GUEST_TRANSFER_MUTATION_KEY = ['guest-transfer'] as const
+
 export function phaseMessageKey(phase: GenerationProgress['phase']): MessageKey {
   switch (phase) {
     case 'resolving_seeds':

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { PlaylistTransferDto } from '@blendify/contracts'
 import type {
   GenerateDiscoverRequest,
   GenerateMixRequest,
@@ -23,7 +24,11 @@ export type PlaylistRunSpec = {
 
 export type PlaylistRunStatus =
   | { phase: 'active'; progress: GenerationProgress | null }
-  | { phase: 'succeeded'; outcome: GenerationOutcome }
+  | {
+      phase: 'succeeded'
+      outcome: GenerationOutcome
+      transfer: PlaylistTransferDto | null
+    }
   | { phase: 'failed'; error: unknown }
   | { phase: 'uncertain'; error: unknown }
 
@@ -42,6 +47,12 @@ type PlaylistRunState = {
   reportProgress: (id: number, progress: GenerationProgress) => void
   succeed: (id: number, outcome: GenerationOutcome) => boolean
   fail: (id: number, error: unknown, uncertain: boolean) => boolean
+  attachTransfer: (id: number, transfer: PlaylistTransferDto) => void
+  restore: (
+    spec: PlaylistRunSpec,
+    outcome: GenerationOutcome,
+    transfer: PlaylistTransferDto | null,
+  ) => boolean
   markSeen: (id: number) => void
   discard: () => void
 }
@@ -82,7 +93,11 @@ export const usePlaylistRunStore = create<PlaylistRunState>((set, get) => ({
     }
     set({
       controller: null,
-      run: { ...run, seen: false, status: { phase: 'succeeded', outcome } },
+      run: {
+        ...run,
+        seen: false,
+        status: { phase: 'succeeded', outcome, transfer: null },
+      },
     })
     return true
   },
@@ -97,6 +112,30 @@ export const usePlaylistRunStore = create<PlaylistRunState>((set, get) => ({
         ...run,
         seen: false,
         status: { phase: uncertain ? 'uncertain' : 'failed', error },
+      },
+    })
+    return true
+  },
+  attachTransfer: (id, transfer) => {
+    const { run } = get()
+    if (run?.id !== id || run.status.phase !== 'succeeded') {
+      return
+    }
+    set({ run: { ...run, status: { ...run.status, transfer } } })
+  },
+  restore: (spec, outcome, transfer) => {
+    const { run, lastId } = get()
+    if (run) {
+      return false
+    }
+    const id = lastId + 1
+    set({
+      lastId: id,
+      run: {
+        id,
+        spec,
+        status: { phase: 'succeeded', outcome, transfer },
+        seen: true,
       },
     })
     return true
