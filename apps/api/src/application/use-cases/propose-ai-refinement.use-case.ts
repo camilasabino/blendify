@@ -41,7 +41,7 @@ import {
   type AiOperationResult,
   type AiOperationTrace,
 } from '@/application/services/ai-observability';
-import { AiSessionLease } from '@/application/services/ai-session-lease';
+import { DestinationLease } from '@/application/services/destination-lease';
 import {
   AI_REFINEMENT_LEASE_MS,
   AI_REFINEMENT_LEASE_RENEW_INTERVAL_MS,
@@ -108,7 +108,7 @@ export class ProposeAiRefinementUseCase {
 
   private async proposeOnce(
     command: ProposeAiRefinementCommand,
-    lease: AiSessionLease,
+    lease: DestinationLease,
     trace: AiOperationTrace,
   ): Promise<AiSessionCommandResult> {
     const current = await this.find(command);
@@ -175,7 +175,7 @@ export class ProposeAiRefinementUseCase {
     evaluation: AiRefinementEvaluation,
     current: AiIntent,
     settled: AiSession,
-    lease: AiSessionLease,
+    lease: DestinationLease,
   ): Promise<{
     outcome: AiRefinementOutcome;
     strategy: AiRefinementCandidateStrategy | null;
@@ -202,7 +202,7 @@ export class ProposeAiRefinementUseCase {
     };
   }
 
-  private requireAuthority(lease: AiSessionLease): void {
+  private requireAuthority(lease: DestinationLease): void {
     if (lease.isLost) {
       throw this.superseded();
     }
@@ -246,8 +246,8 @@ export class ProposeAiRefinementUseCase {
     return AiSessionError.refinementSuperseded();
   }
 
-  private leaseFor(token: string, lockId: string): AiSessionLease {
-    return new AiSessionLease(
+  private leaseFor(token: string, lockId: string): DestinationLease {
+    return new DestinationLease(
       {
         renew: (ttlMs) =>
           this.sessions.renewRefinementLock(token, lockId, ttlMs),

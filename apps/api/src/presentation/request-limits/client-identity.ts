@@ -60,11 +60,15 @@ export function resolveClientIdentity(
   const user: { id?: unknown } | undefined = req.user;
   const userId = user?.id;
   if (typeof userId === 'string' && userId.length > 0) {
-    return { kind: 'user', key: `u:${userId}` };
+    return userIdentity(userId);
   }
   const { ip, fallback } = resolveClientIp(req, source);
   if (fallback) {
     onInvalidIp?.();
   }
   return { kind: 'ip', key: `ip:${ip}` };
+}
+
+export function userIdentity(userId: string): ClientIdentity {
+  return { kind: 'user', key: `u:${userId}` };
 }

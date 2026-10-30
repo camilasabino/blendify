@@ -172,7 +172,6 @@ export class AiSessionsController {
 
   @Post(':sessionId/publish')
   @HttpCode(HttpStatus.OK)
-  @RateLimit('generation')
   @LimitGenerationConcurrency()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({

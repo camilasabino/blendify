@@ -5,9 +5,7 @@ import type {
   PublishedPlaylist,
 } from '@blendify/contracts';
 import { PlaylistPublishIncompleteError } from '@/domain/errors/playlist-publish-incomplete.error';
-import { SpotifyProviderError } from '@/domain/errors/spotify-provider.error';
-import { SpotifyReauthRequiredError } from '@/domain/errors/spotify-reauth-required.error';
-import { isSpotifyQuotaError } from '@/domain/genre/catalog-resolve';
+import { isConfirmedRejection } from '@/domain/publication/spotify-destination';
 import {
   PLAYLIST_REPOSITORY,
   type PlaylistRepositoryPort,
@@ -137,14 +135,6 @@ function tracksAddedAfter(
     return 'all';
   }
   return isConfirmedRejection(error) ? 'none' : 'unknown';
-}
-
-function isConfirmedRejection(error: unknown): boolean {
-  return (
-    error instanceof SpotifyProviderError ||
-    error instanceof SpotifyReauthRequiredError ||
-    isSpotifyQuotaError(error)
-  );
 }
 
 function errorMessage(error: unknown): string {

@@ -3,7 +3,10 @@ import {
   AI_SESSION_RECORD_VERSION,
   type AiSession,
 } from '@/domain/ai/ai-session';
-import type { RedisCacheService } from '@/infrastructure/cache/redis-cache.service';
+import type {
+  CacheWriteOptions,
+  RedisCacheService,
+} from '@/infrastructure/cache/redis-cache.service';
 import { RedisAiSessionRepository } from './redis-ai-session.repository';
 
 const TOKEN = 'opaque-client-token';
@@ -30,19 +33,21 @@ function createRepository(stored: unknown = null) {
     setJson: jest.fn<Promise<void>, [string, unknown, number]>(() =>
       Promise.resolve(),
     ),
-    setIfAbsent: jest.fn<Promise<boolean>, [string, string, number]>(() =>
-      Promise.resolve(true),
-    ),
+    setIfAbsent: jest.fn<
+      Promise<boolean>,
+      [string, string, number, CacheWriteOptions?]
+    >(() => Promise.resolve(true)),
     deleteIfValue: jest.fn<Promise<void>, [string, string]>(() =>
       Promise.resolve(),
     ),
     exists: jest.fn<Promise<boolean>, [string]>(() => Promise.resolve(true)),
-    renewIfValue: jest.fn<Promise<boolean>, [string, string, number]>(() =>
-      Promise.resolve(true),
-    ),
+    renewIfValue: jest.fn<
+      Promise<boolean>,
+      [string, string, number, CacheWriteOptions?]
+    >(() => Promise.resolve(true)),
     setJsonIfFields: jest.fn<
       Promise<boolean>,
-      [string, unknown, number, Record<string, string>]
+      [string, unknown, number, Record<string, string>, CacheWriteOptions?]
     >(() => Promise.resolve(true)),
   };
   const repository = new RedisAiSessionRepository(
@@ -237,5 +242,53 @@ describe('RedisAiSessionRepository', () => {
       'destination.status': 'publishing',
       'destination.attemptId': 'attempt-a',
     });
+  });
+
+  it('starts a publish only if nobody changed the session since it was read', async () => {
+    const { cache, repository } = createRepository();
+
+    await repository.savePublishStart(
+      TOKEN,
+      SESSION,
+      SESSION.updatedAt,
+      60_000,
+    );
+
+    const [key, value, ttlMs, expected] = cache.setJsonIfFields.mock.calls[0];
+    expect(key).toMatch(/^blendify:ai:session:[0-9a-f]{64}$/);
+    expect(value).toEqual(SESSION);
+    expect(ttlMs).toBe(60_000);
+    expect(expected).toEqual({ updatedAt: SESSION.updatedAt });
+  });
+
+  it('coordinates publication claims and writes fail-closed, leaving other session writes best-effort', async () => {
+    const { cache, repository } = createRepository();
+
+    await repository.acquireDestinationClaim(TOKEN, 30_000);
+    await repository.renewDestinationClaim(TOKEN, 'claim-a', 30_000);
+    await repository.savePublishStart(
+      TOKEN,
+      SESSION,
+      SESSION.updatedAt,
+      60_000,
+    );
+    await repository.savePublishOutcome(TOKEN, SESSION, 'attempt-a', 60_000);
+    await repository.saveIfUnchanged(TOKEN, SESSION, SESSION.updatedAt, 60_000);
+    await repository.acquireGenerationLock(TOKEN, 30_000);
+    await repository.renewGenerationLock(TOKEN, 'lease-a', 30_000);
+
+    expect(cache.setIfAbsent.mock.calls.map((call) => call[3])).toEqual([
+      { coordination: true },
+      undefined,
+    ]);
+    expect(cache.renewIfValue.mock.calls.map((call) => call[3])).toEqual([
+      { coordination: true },
+      undefined,
+    ]);
+    expect(cache.setJsonIfFields.mock.calls.map((call) => call[4])).toEqual([
+      { coordination: true },
+      { coordination: true },
+      undefined,
+    ]);
   });
 });

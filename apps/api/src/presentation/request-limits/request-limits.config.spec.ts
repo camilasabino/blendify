@@ -40,6 +40,19 @@ describe('resolveRateLimits', () => {
     });
   });
 
+  it('defines a dedicated fail-closed publish bucket that can be overridden', () => {
+    expect(DEFAULT_RATE_LIMITS.publish).toEqual({
+      limit: 12,
+      windowMs: 600_000,
+      onStoreUnavailable: 'fail-closed',
+    });
+    expect(resolveRateLimits('publish=3/60').publish).toEqual({
+      limit: 3,
+      windowMs: 60_000,
+      onStoreUnavailable: 'fail-closed',
+    });
+  });
+
   it('defines a dedicated fail-closed AI interpretation bucket', () => {
     expect(DEFAULT_RATE_LIMITS.interpret).toEqual({
       limit: 30,

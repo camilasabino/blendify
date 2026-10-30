@@ -26,7 +26,7 @@ import {
   traceAiOperation,
   type AiOperationTrace,
 } from '@/application/services/ai-observability';
-import { AiSessionLease } from '@/application/services/ai-session-lease';
+import { DestinationLease } from '@/application/services/destination-lease';
 import { toAiTransferPlaylist } from '@/application/services/ai-transfer-playlist';
 import {
   DESTINATION_LEASE_MS,
@@ -79,7 +79,7 @@ export class TransferAiPlaylistUseCase {
       throw AiSessionError.destinationInProgress();
     }
 
-    const lease = new AiSessionLease(
+    const lease = new DestinationLease(
       {
         renew: (ttlMs) =>
           this.sessions.renewDestinationClaim(command.token, claimId, ttlMs),

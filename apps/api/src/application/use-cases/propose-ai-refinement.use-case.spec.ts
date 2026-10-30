@@ -244,6 +244,7 @@ function createWorld(
     renewGenerationLock: jest.fn(),
     releaseGenerationLock: jest.fn(),
     hasGenerationLock: jest.fn(),
+    savePublishStart: jest.fn(),
     savePublishOutcome: jest.fn(),
     acquireDestinationClaim: jest.fn(),
     renewDestinationClaim: jest.fn(),
@@ -631,11 +632,13 @@ describe('ProposeAiRefinementUseCase', () => {
             spotifyUrl: null,
           },
           savedToLibrary: true,
+          coverUploadFailed: false,
         },
         {
           status: 'publish_incomplete',
           failedAt: NOW.toISOString(),
           spotifyPlaylist: null,
+          reason: 'outcome_unknown',
         },
         {
           status: 'publishing',

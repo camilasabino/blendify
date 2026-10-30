@@ -12,6 +12,11 @@ import type {
   AiUnsupportedConstraint,
 } from './ai-intent';
 import type { AiPreservation } from './ai-intent-patch';
+import {
+  interruptPublication,
+  type SpotifyDestination,
+  type SpotifyPlaylistLink,
+} from '@/domain/publication/spotify-destination';
 import { findIntentClarification } from './ai-intent-rules';
 import { unsatisfiedRefinementConstraints } from './ai-refinement-constraints';
 import type { AiRefinementClarification } from './ai-refinement';
@@ -50,10 +55,7 @@ export type AiSessionExecution =
       failure: AiGenerationFailure;
     };
 
-export interface AiSpotifyPlaylistLink {
-  spotifyId: string;
-  spotifyUrl: string | null;
-}
+export type AiSpotifyPlaylistLink = SpotifyPlaylistLink;
 
 export interface AiPreparedTransfer {
   url: string;
@@ -62,23 +64,7 @@ export interface AiPreparedTransfer {
 }
 
 export type AiSessionDestination =
-  | {
-      status: 'publishing';
-      attemptId: string;
-      startedAt: string;
-      spotifyPlaylist: AiSpotifyPlaylistLink | null;
-    }
-  | {
-      status: 'published';
-      publishedAt: string;
-      spotifyPlaylist: AiSpotifyPlaylistLink;
-      savedToLibrary: boolean;
-    }
-  | {
-      status: 'publish_incomplete';
-      failedAt: string;
-      spotifyPlaylist: AiSpotifyPlaylistLink | null;
-    }
+  | SpotifyDestination
   | {
       status: 'transfer_prepared';
       preparedAt: string;
@@ -291,35 +277,6 @@ export function withDestination(
   return { ...session, destination, updatedAt: now.toISOString() };
 }
 
-export function withPublishStarted(
-  session: AiSession,
-  attemptId: string,
-  now: Date,
-): AiSession {
-  return withDestination(
-    session,
-    {
-      status: 'publishing',
-      attemptId,
-      startedAt: now.toISOString(),
-      spotifyPlaylist: null,
-    },
-    now,
-  );
-}
-
-export function withSpotifyPlaylistCreated(
-  session: AiSession,
-  spotifyPlaylist: AiSpotifyPlaylistLink,
-  now: Date,
-): AiSession {
-  const { destination } = session;
-  if (destination?.status !== 'publishing') {
-    throw new Error('Only a publishing destination can record its playlist.');
-  }
-  return withDestination(session, { ...destination, spotifyPlaylist }, now);
-}
-
 export function withPublishInterrupted(
   session: AiSession,
   now: Date,
@@ -328,38 +285,7 @@ export function withPublishInterrupted(
   if (destination?.status !== 'publishing') {
     return session;
   }
-  return withPublishIncomplete(session, destination.spotifyPlaylist, now);
-}
-
-export function withPublishIncomplete(
-  session: AiSession,
-  spotifyPlaylist: AiSpotifyPlaylistLink | null,
-  now: Date,
-): AiSession {
-  return withDestination(
-    session,
-    {
-      status: 'publish_incomplete',
-      failedAt: now.toISOString(),
-      spotifyPlaylist,
-    },
-    now,
-  );
-}
-
-export function withPublished(
-  session: AiSession,
-  published: {
-    spotifyPlaylist: AiSpotifyPlaylistLink;
-    savedToLibrary: boolean;
-  },
-  now: Date,
-): AiSession {
-  return withDestination(
-    session,
-    { status: 'published', publishedAt: now.toISOString(), ...published },
-    now,
-  );
+  return withDestination(session, interruptPublication(destination, now), now);
 }
 
 export function withTransferPrepared(

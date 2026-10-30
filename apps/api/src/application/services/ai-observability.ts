@@ -10,7 +10,7 @@ import type {
 import type { AiRefinementStrategy } from '@/domain/ai/ai-refinement-candidate';
 import type { AiPendingRefinement } from '@/domain/ai/ai-session';
 import { AiSessionError } from '@/domain/errors/ai-session.error';
-import type { AiSessionLeaseEvent } from './ai-session-lease';
+import type { DestinationLeaseEvent } from './destination-lease';
 import { currentRequestId } from './request-correlation';
 
 export type AiOperation =
@@ -63,7 +63,7 @@ export interface AiOperationFields {
 }
 
 export type AiDiagnostic =
-  | AiSessionLeaseEvent
+  | DestinationLeaseEvent
   | 'stale_generation_recovered'
   | 'failure_not_persisted'
   | 'state_not_persisted'

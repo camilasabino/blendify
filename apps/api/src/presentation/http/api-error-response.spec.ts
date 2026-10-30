@@ -1,6 +1,7 @@
 import { AiGenerationError } from '@/domain/errors/ai-generation.error';
 import { AiSessionError } from '@/domain/errors/ai-session.error';
 import { CatalogUnavailableError } from '@/domain/errors/catalog-unavailable.error';
+import { CoordinationUnavailableError } from '@/domain/errors/coordination-unavailable.error';
 import { BusinessRuleError } from '@/domain/errors/business-rule.error';
 import { ProviderOutcomeUnknownError } from '@/domain/errors/provider-outcome-unknown.error';
 import { SpotifyProviderError } from '@/domain/errors/spotify-provider.error';
@@ -12,6 +13,21 @@ import {
 } from './api-error-response';
 
 describe('toApiErrorResponse', () => {
+  it('maps unavailable publication coordination to the request-limit 503 envelope without the Redis cause', () => {
+    const response = toApiErrorResponse(
+      new CoordinationUnavailableError({
+        cause: new Error('Connection is closed. redis://secret@host'),
+      }),
+    );
+
+    expect(response).toEqual({
+      statusCode: 503,
+      code: 'SERVICE_UNAVAILABLE',
+      message: 'Service temporarily unavailable. Try again shortly.',
+      details: { retryAfterSeconds: 5 },
+    });
+  });
+
   it('maps an unavailable catalog to a 503 without exposing the cause', () => {
     const response = toApiErrorResponse(
       new CatalogUnavailableError({

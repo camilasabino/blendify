@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { CATALOG_PROVIDER_FACTORY } from '@/domain/repositories/catalog-provider.port';
 import { MUSIC_PROVIDER_FACTORY } from '@/domain/repositories/music-provider.factory.port';
 import { PLAYLIST_REPOSITORY } from '@/domain/repositories/playlist.repository.port';
@@ -25,7 +26,6 @@ const providers = [
   PrismaPlaylistRepository,
   PrismaUsageStatsRepository,
   RedisConnection,
-  RedisCacheService,
   SpotifyAuthClient,
   SpotifyTokenService,
   SpotifyAppTokenProvider,
@@ -35,6 +35,17 @@ const providers = [
 ];
 
 const bindings = [
+  {
+    provide: RedisCacheService,
+    inject: [RedisConnection, ConfigService],
+    useFactory: (connection: RedisConnection, config: ConfigService) =>
+      new RedisCacheService(
+        connection,
+        config.get<string>('NODE_ENV') === 'production'
+          ? 'fail-closed'
+          : 'memory',
+      ),
+  },
   { provide: MUSIC_PROVIDER_FACTORY, useExisting: SpotifyMusicProvider },
   { provide: CATALOG_PROVIDER_FACTORY, useExisting: SpotifyMusicProvider },
   { provide: PLAYLIST_REPOSITORY, useExisting: PrismaPlaylistRepository },

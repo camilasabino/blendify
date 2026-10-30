@@ -78,6 +78,7 @@ function createWorld(
     releaseDestinationClaim: jest.fn(() => Promise.resolve()),
     renewDestinationClaim: jest.fn(() => Promise.resolve(true)),
     hasDestinationClaim: jest.fn(() => Promise.resolve(claimHeld)),
+    savePublishStart: jest.fn(() => Promise.resolve(true)),
     savePublishOutcome: jest.fn(() => Promise.resolve(true)),
     renewGenerationLock: jest.fn(() => Promise.resolve(true)),
     saveIfUnchanged: jest.fn(() => Promise.resolve(true)),
@@ -259,6 +260,7 @@ describe('GetAiSessionUseCase', () => {
           publishedAt: STARTED_AT,
           spotifyPlaylist: { spotifyId: 'p1', spotifyUrl: 'https://sp/p1' },
           savedToLibrary: true,
+          coverUploadFailed: false,
         },
       });
       const world = createWorld([

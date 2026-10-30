@@ -5,12 +5,16 @@ import {
   type AiSession,
 } from '@/domain/ai/ai-session';
 import type { AiSessionRepositoryPort } from '@/domain/repositories/ai-session.repository.port';
-import { RedisCacheService } from '@/infrastructure/cache/redis-cache.service';
+import {
+  RedisCacheService,
+  type CacheWriteOptions,
+} from '@/infrastructure/cache/redis-cache.service';
 
 const AI_SESSION_KEY_PREFIX = 'blendify:ai:session';
 const AI_GENERATION_LOCK_KEY_PREFIX = 'blendify:ai:generation-lock';
 const AI_DESTINATION_CLAIM_KEY_PREFIX = 'blendify:ai:destination-claim';
 const AI_REFINEMENT_LOCK_KEY_PREFIX = 'blendify:ai:refinement-lock';
+const PUBLICATION_COORDINATION: CacheWriteOptions = { coordination: true };
 
 @Injectable()
 export class RedisAiSessionRepository implements AiSessionRepositoryPort {
@@ -41,16 +45,37 @@ export class RedisAiSessionRepository implements AiSessionRepositoryPort {
     });
   }
 
+  savePublishStart(
+    token: string,
+    session: AiSession,
+    expectedUpdatedAt: string,
+    ttlMs: number,
+  ): Promise<boolean> {
+    return this.cache.setJsonIfFields(
+      sessionKey(token),
+      session,
+      ttlMs,
+      { updatedAt: expectedUpdatedAt },
+      PUBLICATION_COORDINATION,
+    );
+  }
+
   savePublishOutcome(
     token: string,
     session: AiSession,
     attemptId: string,
     ttlMs: number,
   ): Promise<boolean> {
-    return this.cache.setJsonIfFields(sessionKey(token), session, ttlMs, {
-      'destination.status': 'publishing',
-      'destination.attemptId': attemptId,
-    });
+    return this.cache.setJsonIfFields(
+      sessionKey(token),
+      session,
+      ttlMs,
+      {
+        'destination.status': 'publishing',
+        'destination.attemptId': attemptId,
+      },
+      PUBLICATION_COORDINATION,
+    );
   }
 
   async acquireGenerationLock(
@@ -91,6 +116,7 @@ export class RedisAiSessionRepository implements AiSessionRepositoryPort {
       destinationClaimKey(token),
       claimId,
       ttlMs,
+      PUBLICATION_COORDINATION,
     );
     return acquired ? claimId : null;
   }
@@ -100,7 +126,12 @@ export class RedisAiSessionRepository implements AiSessionRepositoryPort {
     claimId: string,
     ttlMs: number,
   ): Promise<boolean> {
-    return this.cache.renewIfValue(destinationClaimKey(token), claimId, ttlMs);
+    return this.cache.renewIfValue(
+      destinationClaimKey(token),
+      claimId,
+      ttlMs,
+      PUBLICATION_COORDINATION,
+    );
   }
 
   releaseDestinationClaim(token: string, claimId: string): Promise<void> {

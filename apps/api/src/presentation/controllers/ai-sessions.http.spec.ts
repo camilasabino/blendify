@@ -36,6 +36,7 @@ import { GenerateAiPlaylistUseCase } from '@/application/use-cases/generate-ai-p
 import { GetAiSessionUseCase } from '@/application/use-cases/get-ai-session.use-case';
 import { ProposeAiRefinementUseCase } from '@/application/use-cases/propose-ai-refinement.use-case';
 import { AiRefinementCandidateBuilder } from '@/application/services/ai-refinement-candidate.service';
+import { SpotifyPublicationRunner } from '@/application/services/spotify-publication.runner';
 import { PublishAiPlaylistUseCase } from '@/application/use-cases/publish-ai-playlist.use-case';
 import { TransferAiPlaylistUseCase } from '@/application/use-cases/transfer-ai-playlist.use-case';
 import { PublishPlaylistService } from '@/application/services/publish-playlist.service';
@@ -353,6 +354,15 @@ function createWorld() {
           return Promise.resolve(true);
         },
       ),
+      savePublishStart: jest.fn(
+        (token: string, session: AiSession, expectedUpdatedAt: string) => {
+          if (stored.get(token)?.updatedAt !== expectedUpdatedAt) {
+            return Promise.resolve(false);
+          }
+          stored.set(token, session);
+          return Promise.resolve(true);
+        },
+      ),
       acquireRefinementLock: jest.fn((token: string) => {
         if (refinementLocks.has(token)) {
           return Promise.resolve<string | null>(null);
@@ -446,6 +456,7 @@ async function createApp(
   options: {
     transferEnabled?: boolean;
     generationLimit?: number;
+    publishLimit?: number;
     refinementsPerSession?: number;
   } = {},
 ): Promise<INestApplication> {
@@ -508,6 +519,7 @@ async function createApp(
       { provide: PLAYLIST_TRANSFER_GATEWAY, useValue: world.soundiiz },
       GuestTransferGate,
       PublishPlaylistService,
+      SpotifyPublicationRunner,
       PublishAiPlaylistUseCase,
       TransferAiPlaylistUseCase,
       { provide: REFINEMENT_PLANNER, useValue: world.planner },
@@ -525,6 +537,10 @@ async function createApp(
           generation: {
             ...DEFAULT_RATE_LIMITS.generation,
             limit: options.generationLimit ?? GENERATION_LIMIT,
+          },
+          publish: {
+            ...DEFAULT_RATE_LIMITS.publish,
+            limit: options.publishLimit ?? DEFAULT_RATE_LIMITS.publish.limit,
           },
         },
       }),
@@ -1882,6 +1898,65 @@ describe('Create with AI sessions over HTTP', () => {
       expect(world.claims.size).toBe(0);
     });
 
+    it('treats an unexpected error while creating the playlist as uncertain and never retries it', async () => {
+      await restartWithGenerationLimit(5);
+      const owner = await sessionCookie('user-1');
+      const sessionKey = await generatedSession(owner);
+      world.spotify.createPlaylist.mockRejectedValueOnce(
+        new TypeError('Cannot read properties of undefined'),
+      );
+
+      const first = await publish(sessionKey, PUBLISH, owner).expect(200);
+      const repeated = await publish(sessionKey, PUBLISH, owner).expect(200);
+
+      for (const response of [first, repeated]) {
+        expect(AiSessionStateSchema.parse(response.body).destination).toEqual({
+          status: 'publish_incomplete',
+          spotifyUrl: null,
+        });
+      }
+      expect(JSON.stringify(first.body)).not.toContain('Cannot read');
+      expect(world.stored.get(sessionKey)?.destination).toMatchObject({
+        status: 'publish_incomplete',
+        reason: 'outcome_unknown',
+      });
+      expect(world.spotify.createPlaylist).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the strict legacy destination shape when the cover upload or the Library save fails', async () => {
+      await restartWithGenerationLimit(5);
+      const owner = await sessionCookie('user-1');
+      const withCover = await generatedSession(owner);
+      const withLibrary = await generatedSession(owner);
+      world.spotify.uploadPlaylistCover.mockRejectedValueOnce(
+        new Error('cover rejected'),
+      );
+
+      const covered = await publish(
+        withCover,
+        { ...PUBLISH, coverImageBase64: 'AAAA' },
+        owner,
+      ).expect(200);
+      world.playlists.save.mockRejectedValueOnce(new Error('db down'));
+      const unsaved = await publish(withLibrary, PUBLISH, owner).expect(200);
+
+      expect(AiSessionStateSchema.parse(covered.body).destination).toEqual({
+        status: 'published',
+        spotifyUrl: SPOTIFY_PLAYLIST.url,
+        savedToLibrary: true,
+      });
+      expect(AiSessionStateSchema.parse(unsaved.body).destination).toEqual({
+        status: 'publish_incomplete',
+        spotifyUrl: SPOTIFY_PLAYLIST.url,
+      });
+      expect(world.stored.get(withCover)?.destination).toMatchObject({
+        coverUploadFailed: true,
+      });
+      expect(world.stored.get(withLibrary)?.destination).toMatchObject({
+        reason: 'library_not_saved',
+      });
+    });
+
     it('refuses destinations for sessions that are not generated, expired or foreign', async () => {
       const owner = await sessionCookie('user-1');
       const other = await sessionCookie('user-2');
@@ -1904,15 +1979,44 @@ describe('Create with AI sessions over HTTP', () => {
       expectNoDestinationSideEffects();
     });
 
-    it('limits Spotify publishing with the existing generation bucket', async () => {
+    it('charges Spotify publishing to the publish bucket instead of the generation bucket', async () => {
       const owner = await sessionCookie('user-1');
       const sessionKey = await generatedSession(owner);
 
       await publish(sessionKey, PUBLISH, owner).expect(200);
-      const limited = await publish(sessionKey, PUBLISH, owner).expect(429);
+      await publish(sessionKey, PUBLISH, owner).expect(200);
+      await publish(sessionKey, PUBLISH, owner).expect(200);
+      await generatedSession(owner);
 
-      expect(limited.body).toMatchObject({ code: 'RATE_LIMITED' });
       expect(world.spotify.createPlaylist).toHaveBeenCalledTimes(1);
+    });
+
+    it('charges the publish bucket only for new attempts, per user', async () => {
+      await app.close();
+      app = await createApp(
+        world,
+        { provide: INTENT_INTERPRETER, useValue: world.interpreter },
+        { generationLimit: 10, publishLimit: 1 },
+      );
+      const owner = await sessionCookie('user-1');
+      const first = await generatedSession(owner);
+      const second = await generatedSession(owner);
+      const otherUser = await sessionCookie('user-2');
+      const foreign = await generatedSession(otherUser);
+
+      await publish(first, PUBLISH, owner).expect(200);
+      await publish(first, PUBLISH, owner).expect(200);
+      await readSession(first, owner).expect(200);
+      const limited = await publish(second, PUBLISH, owner).expect(429);
+      await publish(foreign, PUBLISH, otherUser).expect(200);
+
+      expect(limited.body).toMatchObject({
+        code: 'RATE_LIMITED',
+        details: { retryAfterSeconds: expect.any(Number) },
+      });
+      expect(world.stored.get(second)?.destination).toBeNull();
+      expect(world.claims.size).toBe(0);
+      expect(world.spotify.createPlaylist).toHaveBeenCalledTimes(2);
     });
 
     it('prepares a Guest Soundiiz transfer from the server-held playlist under the edited name', async () => {

@@ -35,7 +35,7 @@ import {
   traceAiOperation,
   type AiOperationTrace,
 } from '@/application/services/ai-observability';
-import { AiSessionLease } from '@/application/services/ai-session-lease';
+import { DestinationLease } from '@/application/services/destination-lease';
 import {
   GENERATION_LEASE_MS,
   GENERATION_LEASE_RENEW_INTERVAL_MS,
@@ -94,7 +94,7 @@ export class GenerateAiPlaylistUseCase {
       throw AiSessionError.generationInProgress();
     }
 
-    const lease = new AiSessionLease(
+    const lease = new DestinationLease(
       {
         renew: (ttlMs) =>
           this.sessions.renewGenerationLock(command.token, leaseId, ttlMs),
@@ -116,7 +116,7 @@ export class GenerateAiPlaylistUseCase {
 
   private async generateOnce(
     command: GenerateAiPlaylistCommand,
-    lease: AiSessionLease,
+    lease: DestinationLease,
     trace: AiOperationTrace,
   ): Promise<AiSessionCommandResult> {
     const current = await findReadableAiSession(
@@ -168,7 +168,7 @@ export class GenerateAiPlaylistUseCase {
 
   private async generate(
     intent: AiIntent,
-    lease: AiSessionLease,
+    lease: DestinationLease,
     onProgress?: ProgressReporter,
   ): Promise<AiGenerationResult> {
     requireAuthority(lease);
@@ -268,7 +268,7 @@ export class GenerateAiPlaylistUseCase {
   }
 }
 
-function requireAuthority(lease: AiSessionLease): void {
+function requireAuthority(lease: DestinationLease): void {
   if (lease.isLost) {
     throw AiSessionError.generationSuperseded();
   }

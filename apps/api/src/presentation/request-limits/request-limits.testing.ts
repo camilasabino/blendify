@@ -1,6 +1,8 @@
 import type { Provider } from '@nestjs/common';
+import { PUBLICATION_QUOTA } from '@/domain/repositories/publication-quota.port';
 import { MemoryRequestLimitStore } from '@/infrastructure/request-limits/memory-request-limit.store';
 import { GenerationConcurrencyInterceptor } from './generation-concurrency.interceptor';
+import { PublicationQuotaAdapter } from './publication-quota.adapter';
 import { RateLimitGuard } from './rate-limit.guard';
 import { RequestLimiter } from './request-limiter';
 import {
@@ -26,5 +28,7 @@ export function inMemoryRequestLimitProviders(
     },
     RateLimitGuard,
     GenerationConcurrencyInterceptor,
+    PublicationQuotaAdapter,
+    { provide: PUBLICATION_QUOTA, useExisting: PublicationQuotaAdapter },
   ];
 }

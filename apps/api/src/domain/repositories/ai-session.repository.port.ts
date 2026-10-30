@@ -19,6 +19,12 @@ export interface AiSessionRepositoryPort {
   ): Promise<boolean>;
   releaseGenerationLock(token: string, leaseId: string): Promise<void>;
   hasGenerationLock(token: string): Promise<boolean>;
+  savePublishStart(
+    token: string,
+    session: AiSession,
+    expectedUpdatedAt: string,
+    ttlMs: number,
+  ): Promise<boolean>;
   savePublishOutcome(
     token: string,
     session: AiSession,

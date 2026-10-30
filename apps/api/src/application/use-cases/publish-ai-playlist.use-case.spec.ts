@@ -7,6 +7,8 @@ import {
   type AiSessionDestination,
 } from '@/domain/ai/ai-session';
 import { AiSessionError } from '@/domain/errors/ai-session.error';
+import { CoordinationUnavailableError } from '@/domain/errors/coordination-unavailable.error';
+import { SpotifyProviderError } from '@/domain/errors/spotify-provider.error';
 import type { AiSessionRepositoryPort } from '@/domain/repositories/ai-session.repository.port';
 import type { MusicProviderPort } from '@/domain/repositories/music-provider.port';
 import type { UsageStatsRepositoryPort } from '@/domain/repositories/usage-stats.repository.port';
@@ -19,6 +21,7 @@ import {
   DESTINATION_LEASE_RENEW_INTERVAL_MS,
 } from '@/application/services/destination-lease.policy';
 import type { PublishPlaylistService } from '@/application/services/publish-playlist.service';
+import { SpotifyPublicationRunner } from '@/application/services/spotify-publication.runner';
 import { PublishAiPlaylistUseCase } from './publish-ai-playlist.use-case';
 
 const TOKEN = 'session-token';
@@ -109,7 +112,7 @@ function setup(initial: AiSession) {
       stored = next;
       return Promise.resolve();
     }),
-    saveIfUnchanged: jest.fn(
+    savePublishStart: jest.fn(
       (_token: string, next: AiSession, expectedUpdatedAt: string) => {
         if (stored.updatedAt !== expectedUpdatedAt) {
           return Promise.resolve(false);
@@ -177,8 +180,13 @@ function setup(initial: AiSession) {
         });
       }),
   );
-  const useCase = new PublishAiPlaylistUseCase(
-    sessions as unknown as AiSessionRepositoryPort,
+  const quota = { consume: jest.fn(() => Promise.resolve()) };
+  const runner = new SpotifyPublicationRunner(
+    { execute: publish } as unknown as PublishPlaylistService,
+    quota,
+    {
+      recordMix: jest.fn(() => Promise.resolve()),
+    } as unknown as UsageStatsRepositoryPort,
     {
       findById: () =>
         Promise.resolve(
@@ -190,14 +198,15 @@ function setup(initial: AiSession) {
         ),
     } as unknown as UserRepositoryPort,
     { forUser: () => ({}) as MusicProviderPort },
-    {
-      recordMix: jest.fn(() => Promise.resolve()),
-    } as unknown as UsageStatsRepositoryPort,
-    { execute: publish } as unknown as PublishPlaylistService,
+  );
+  const useCase = new PublishAiPlaylistUseCase(
+    sessions as unknown as AiSessionRepositoryPort,
+    runner,
   );
   return {
     useCase,
     sessions,
+    quota,
     publish,
     pending,
     claims,
@@ -207,6 +216,14 @@ function setup(initial: AiSession) {
     },
     loseClaim: () => claims.delete(TOKEN),
   };
+}
+
+function spotifyRejection(): SpotifyProviderError {
+  return new SpotifyProviderError('SPOTIFY_REQUEST_REJECTED', {
+    operation: 'createPlaylist',
+    category: 'rejected',
+    status: 400,
+  });
 }
 
 const COMMAND = {
@@ -370,9 +387,9 @@ describe('PublishAiPlaylistUseCase', () => {
       await jest.advanceTimersByTimeAsync(DESTINATION_LEASE_RENEW_INTERVAL_MS);
       const newer = await world.useCase.execute(COMMAND);
 
-      world.pending[0].fail(new Error('Spotify createPlaylist failed (400)'));
+      world.pending[0].fail(spotifyRejection());
 
-      await expect(stale).rejects.toThrow('createPlaylist failed');
+      await expect(stale).rejects.toBeInstanceOf(SpotifyProviderError);
       expect(world.stored()).toBe(newer.session);
       expect(world.stored().destination).toMatchObject({
         status: 'publish_incomplete',
@@ -431,13 +448,107 @@ describe('PublishAiPlaylistUseCase', () => {
     expect(world.publish).toHaveBeenCalledTimes(1);
   });
 
-  it('frees the destination after a clean failure before any playlist exists', async () => {
+  it('frees the destination after a confirmed rejection before any playlist exists', async () => {
     const world = setup(generatedSession());
     const first = world.useCase.execute(COMMAND);
     await flush();
-    world.pending[0].fail(new Error('Spotify createPlaylist failed (400)'));
+    world.pending[0].fail(spotifyRejection());
 
-    await expect(first).rejects.toThrow('createPlaylist failed');
+    await expect(first).rejects.toBeInstanceOf(SpotifyProviderError);
+    expect(world.stored().destination).toBeNull();
+    expect(world.claims.has(TOKEN)).toBe(false);
+
+    const retry = world.useCase.execute(COMMAND);
+    await flush();
+    world.pending[1].succeed();
+    await expect(retry).resolves.toMatchObject({
+      session: { destination: { status: 'published' } },
+    });
+    expect(world.quota.consume).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ['a generic Error', new Error('socket hang up')],
+    ['a TypeError', new TypeError('Cannot read properties of undefined')],
+  ])(
+    'treats %s raised while creating the playlist as an unknown outcome and never retries it',
+    async (_label, error) => {
+      const world = setup(generatedSession());
+      const first = world.useCase.execute(COMMAND);
+      await flush();
+      world.pending[0].fail(error);
+
+      const { session } = await first;
+      const replay = await world.useCase.execute(COMMAND);
+
+      expect(session.destination).toMatchObject({
+        status: 'publish_incomplete',
+        spotifyPlaylist: null,
+        reason: 'outcome_unknown',
+      });
+      expect(publicDestination(session)).toEqual({
+        status: 'publish_incomplete',
+        spotifyUrl: null,
+      });
+      expect(replay.session).toBe(session);
+      expect(world.publish).toHaveBeenCalledTimes(1);
+      expect(world.quota.consume).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('charges the publish quota only when a new attempt starts', async () => {
+    const world = setup(generatedSession());
+    const first = world.useCase.execute(COMMAND);
+    await flush();
+    await expect(world.useCase.execute(COMMAND)).rejects.toEqual(
+      AiSessionError.destinationInProgress(),
+    );
+    world.pending[0].succeed();
+    await first;
+    await world.useCase.execute(COMMAND);
+
+    expect(world.quota.consume).toHaveBeenCalledTimes(1);
+    expect(world.quota.consume).toHaveBeenCalledWith('user-1');
+  });
+
+  it('fails closed without calling Spotify when Redis cannot grant the claim', async () => {
+    const world = setup(generatedSession());
+    world.sessions.acquireDestinationClaim.mockRejectedValueOnce(
+      new CoordinationUnavailableError(),
+    );
+
+    await expect(world.useCase.execute(COMMAND)).rejects.toBeInstanceOf(
+      CoordinationUnavailableError,
+    );
+    expect(world.quota.consume).not.toHaveBeenCalled();
+    expect(world.publish).not.toHaveBeenCalled();
+  });
+
+  it('rolls back an interrupted start write and calls no Spotify write', async () => {
+    const world = setup(generatedSession());
+    world.sessions.savePublishStart.mockImplementationOnce(
+      (_token: string, next: AiSession) => {
+        world.replace(next);
+        return Promise.reject(new CoordinationUnavailableError());
+      },
+    );
+
+    await expect(world.useCase.execute(COMMAND)).rejects.toBeInstanceOf(
+      CoordinationUnavailableError,
+    );
+    expect(world.publish).not.toHaveBeenCalled();
+    expect(world.stored().destination).toBeNull();
+    expect(world.claims.has(TOKEN)).toBe(false);
+  });
+
+  it('starts no attempt and calls no Spotify write when the publish quota rejects', async () => {
+    const world = setup(generatedSession());
+    const limited = new Error('rate limited');
+    world.quota.consume.mockRejectedValueOnce(limited);
+
+    await expect(world.useCase.execute(COMMAND)).rejects.toBe(limited);
+
+    expect(world.publish).not.toHaveBeenCalled();
     expect(world.stored().destination).toBeNull();
     expect(world.claims.has(TOKEN)).toBe(false);
   });
@@ -586,7 +697,7 @@ describe('PublishAiPlaylistUseCase', () => {
         pendingRefinement: PENDING[0],
         updatedAt: new Date(Date.now() + 1).toISOString(),
       };
-      world.sessions.saveIfUnchanged.mockImplementationOnce(() => {
+      world.sessions.savePublishStart.mockImplementationOnce(() => {
         world.replace(withPending);
         return Promise.resolve(false);
       });

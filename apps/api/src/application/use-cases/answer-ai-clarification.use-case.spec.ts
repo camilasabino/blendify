@@ -69,6 +69,7 @@ function createUseCase(session: AiSession | null) {
     releaseDestinationClaim: jest.fn(() => Promise.resolve()),
     renewDestinationClaim: jest.fn(() => Promise.resolve(true)),
     hasDestinationClaim: jest.fn(() => Promise.resolve(false)),
+    savePublishStart: jest.fn(() => Promise.resolve(true)),
     savePublishOutcome: jest.fn(() => Promise.resolve(true)),
     renewGenerationLock: jest.fn(() => Promise.resolve(true)),
     saveIfUnchanged: jest.fn(() => Promise.resolve(true)),

@@ -211,6 +211,7 @@ function createWorld(initial: AiSession | null = session()) {
     releaseDestinationClaim: jest.fn(() => Promise.resolve()),
     renewDestinationClaim: jest.fn(() => Promise.resolve(true)),
     hasDestinationClaim: jest.fn(() => Promise.resolve(false)),
+    savePublishStart: jest.fn(() => Promise.resolve(true)),
     savePublishOutcome: jest.fn(() => Promise.resolve(true)),
     renewGenerationLock: jest.fn(
       (token: string, leaseId: string, ttlMs: number) =>

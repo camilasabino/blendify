@@ -10,7 +10,6 @@ import { GetAiSessionUseCase } from '@/application/use-cases/get-ai-session.use-
 import { ProposeAiRefinementUseCase } from '@/application/use-cases/propose-ai-refinement.use-case';
 import { PublishAiPlaylistUseCase } from '@/application/use-cases/publish-ai-playlist.use-case';
 import { TransferAiPlaylistUseCase } from '@/application/use-cases/transfer-ai-playlist.use-case';
-import { PublishPlaylistService } from '@/application/services/publish-playlist.service';
 import { AI_SESSION_REPOSITORY } from '@/domain/repositories/ai-session.repository.port';
 import { INTENT_INTERPRETER } from '@/domain/repositories/intent-interpreter.port';
 import { REFINEMENT_PLANNER } from '@/domain/repositories/refinement-planner.port';
@@ -18,11 +17,17 @@ import { AiServiceIntentInterpreterAdapter } from '@/infrastructure/ai/ai-servic
 import { RedisAiSessionRepository } from '@/infrastructure/ai/redis-ai-session.repository';
 import { AiSessionsController } from '@/presentation/controllers/ai-sessions.controller';
 import { GenerationModule } from './generation.module';
+import { PublicationModule } from './publication.module';
 import { TransferTokensModule } from './transfer-tokens.module';
 import { TransfersModule } from './transfers.module';
 
 @Module({
-  imports: [GenerationModule, TransferTokensModule, TransfersModule],
+  imports: [
+    GenerationModule,
+    PublicationModule,
+    TransferTokensModule,
+    TransfersModule,
+  ],
   controllers: [AiSessionsController],
   providers: [
     AiServiceIntentInterpreterAdapter,
@@ -44,7 +49,6 @@ import { TransfersModule } from './transfers.module';
     GetAiSessionUseCase,
     AiIntentResolver,
     GenerateAiPlaylistUseCase,
-    PublishPlaylistService,
     PublishAiPlaylistUseCase,
     TransferAiPlaylistUseCase,
     AiRefinementCandidateBuilder,

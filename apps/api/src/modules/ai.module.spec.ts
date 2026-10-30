@@ -12,6 +12,7 @@ import {
 import { MUSIC_PROVIDER_FACTORY } from '@/domain/repositories/music-provider.factory.port';
 import { PLAYLIST_REPOSITORY } from '@/domain/repositories/playlist.repository.port';
 import { PROVIDER_QUOTA } from '@/domain/repositories/provider-quota.port';
+import { PUBLICATION_QUOTA } from '@/domain/repositories/publication-quota.port';
 import { USAGE_STATS_REPOSITORY } from '@/domain/repositories/usage-stats.repository.port';
 import { USER_REPOSITORY } from '@/domain/repositories/user.repository.port';
 import { AiServiceIntentInterpreterAdapter } from '@/infrastructure/ai/ai-service-intent-interpreter.adapter';
@@ -36,6 +37,7 @@ import { AiModule } from './ai.module';
   exports: [
     RedisCacheService,
     RequestLimiter,
+    PUBLICATION_QUOTA,
     CATALOG_PROVIDER_FACTORY,
     DISCOVERY_CATALOG,
     PROVIDER_QUOTA,

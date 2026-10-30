@@ -3,6 +3,7 @@ import request from 'supertest';
 import {
   normalizeIp,
   resolveClientIdentity,
+  userIdentity,
   type ClientIdentity,
 } from './client-identity';
 import {
@@ -201,5 +202,14 @@ describe('parseClientIpSource', () => {
     expect(() => parseClientIpSource('x-real-ip')).toThrow(
       'Invalid CLIENT_IP_SOURCE',
     );
+  });
+});
+
+describe('userIdentity', () => {
+  it('keys an authenticated user exactly like a request carrying that user', () => {
+    const req = { user: { id: 'user-1' } } as unknown as Request;
+
+    expect(userIdentity('user-1')).toEqual({ kind: 'user', key: 'u:user-1' });
+    expect(resolveClientIdentity(req)).toEqual(userIdentity('user-1'));
   });
 });

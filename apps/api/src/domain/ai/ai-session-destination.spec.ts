@@ -75,6 +75,7 @@ describe('withPublishInterrupted', () => {
       status: 'publish_incomplete',
       failedAt: NOW.toISOString(),
       spotifyPlaylist,
+      reason: 'interrupted',
     });
   });
 
@@ -84,6 +85,7 @@ describe('withPublishInterrupted', () => {
       publishedAt: ago(1_000),
       spotifyPlaylist: { spotifyId: 'p1', spotifyUrl: null },
       savedToLibrary: true,
+      coverUploadFailed: false,
     });
 
     expect(withPublishInterrupted(settled, NOW)).toBe(settled);

@@ -178,6 +178,7 @@ describeWithRedis(
         status: 'publish_incomplete',
         failedAt: new Date().toISOString(),
         spotifyPlaylist: null,
+        reason: 'interrupted',
       });
       await expect(
         repository.savePublishOutcome(token, interrupted, 'attempt-a', 60_000),
@@ -196,6 +197,7 @@ describeWithRedis(
             publishedAt: new Date().toISOString(),
             spotifyPlaylist: { spotifyId: 'p1', spotifyUrl: null },
             savedToLibrary: true,
+            coverUploadFailed: false,
           }),
           'attempt-a',
           60_000,

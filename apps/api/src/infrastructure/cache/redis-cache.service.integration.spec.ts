@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
+import { CoordinationUnavailableError } from '@/domain/errors/coordination-unavailable.error';
 import { RedisCacheService } from './redis-cache.service';
 import { RedisConnection } from './redis-connection';
 
@@ -103,4 +104,79 @@ describeWithRedis('RedisCacheService owned keys against real Redis', () => {
       cache.setJsonIfFields(`${key}:missing`, {}, 5_000, expected),
     ).resolves.toBe(false);
   });
+
+  it('deletes a JSON document only while nested fields match', async () => {
+    const key = `blendify:test:${randomUUID()}`;
+    const expected = {
+      'destination.status': 'publishing',
+      'destination.attemptId': 'attempt-a',
+    };
+
+    await cache.setJson(
+      key,
+      { destination: { status: 'publishing', attemptId: 'attempt-b' } },
+      5_000,
+    );
+    await expect(cache.deleteIfFields(key, expected)).resolves.toBe(false);
+    await expect(cache.getJson(key)).resolves.not.toBeNull();
+
+    await cache.setJson(
+      key,
+      { destination: { status: 'publishing', attemptId: 'attempt-a' } },
+      5_000,
+    );
+    await expect(cache.deleteIfFields(key, expected)).resolves.toBe(true);
+    await expect(cache.getJson(key)).resolves.toBeNull();
+    await expect(cache.deleteIfFields(key, expected)).resolves.toBe(false);
+
+    await connection.readyClient()?.set(key, 'not-json', 'PX', 5_000);
+    await expect(cache.deleteIfFields(key, expected)).resolves.toBe(false);
+  });
+
+  it('lets exactly one of many concurrent coordinated claims win', async () => {
+    const strict = new RedisCacheService(connection, 'fail-closed');
+    const key = `blendify:test:${randomUUID()}`;
+
+    const results = await Promise.all(
+      Array.from({ length: 20 }, (_, index) =>
+        strict.setIfAbsent(key, `owner-${index}`, 5_000, {
+          coordination: true,
+        }),
+      ),
+    );
+
+    expect(results.filter(Boolean)).toHaveLength(1);
+  });
 });
+
+describeWithRedis(
+  'RedisCacheService coordination after Redis disconnects',
+  () => {
+    it('fails closed instead of granting a claim from process memory', async () => {
+      const connection = new RedisConnection({
+        get: () => redisUrl,
+      } as unknown as ConfigService);
+      await connection.onModuleInit();
+      const strict = new RedisCacheService(connection, 'fail-closed');
+      const key = `blendify:test:${randomUUID()}`;
+      await expect(
+        strict.setIfAbsent(key, 'owner-a', 5_000, { coordination: true }),
+      ).resolves.toBe(true);
+
+      await connection.onModuleDestroy();
+
+      await expect(
+        strict.setIfAbsent(key, 'owner-b', 5_000, { coordination: true }),
+      ).rejects.toBeInstanceOf(CoordinationUnavailableError);
+      await expect(
+        strict.setJsonIfFields(
+          key,
+          {},
+          5_000,
+          { status: 'publishing' },
+          { coordination: true },
+        ),
+      ).rejects.toBeInstanceOf(CoordinationUnavailableError);
+    });
+  },
+);

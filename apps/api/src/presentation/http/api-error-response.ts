@@ -16,6 +16,7 @@ import {
 } from '@/domain/errors/ai-session.error';
 import { BusinessRuleError } from '@/domain/errors/business-rule.error';
 import { CatalogUnavailableError } from '@/domain/errors/catalog-unavailable.error';
+import { CoordinationUnavailableError } from '@/domain/errors/coordination-unavailable.error';
 import { PlaylistPublishIncompleteError } from '@/domain/errors/playlist-publish-incomplete.error';
 import { ProviderOutcomeUnknownError } from '@/domain/errors/provider-outcome-unknown.error';
 import {
@@ -27,7 +28,10 @@ import {
   TransferError,
   type TransferErrorCode,
 } from '@/domain/errors/transfer.error';
-import { RequestLimitError } from './request-limit.error';
+import {
+  RequestLimitError,
+  SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS,
+} from './request-limit.error';
 
 const TRANSFER_ERROR_STATUS: Record<TransferErrorCode, number> = {
   TRANSFER_TOKEN_INVALID: HttpStatus.BAD_REQUEST,
@@ -88,6 +92,15 @@ export function toApiErrorResponse(exception: unknown): ApiErrorResponse {
       code: exception.code,
       message: exception.message,
       details: { retryAfterSeconds: exception.retryAfterSeconds },
+    };
+  }
+
+  if (exception instanceof CoordinationUnavailableError) {
+    return {
+      statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+      code: exception.code,
+      message: exception.message,
+      details: { retryAfterSeconds: SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS },
     };
   }
 

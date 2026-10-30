@@ -1,24 +1,24 @@
-export type AiSessionLeaseEvent = 'lease_lost' | 'lease_renew_failed';
+export type DestinationLeaseEvent = 'lease_lost' | 'lease_renew_failed';
 
-export interface AiSessionLeaseStore {
+export interface DestinationLeaseStore {
   renew(ttlMs: number): Promise<boolean>;
   release(): Promise<void>;
 }
 
-export interface AiSessionLeasePolicy {
+export interface DestinationLeasePolicy {
   leaseMs: number;
   renewIntervalMs: number;
 }
 
-export class AiSessionLease {
+export class DestinationLease {
   private readonly timer: NodeJS.Timeout;
   private stopped = false;
   private lost = false;
 
   constructor(
-    private readonly store: AiSessionLeaseStore,
-    private readonly policy: AiSessionLeasePolicy,
-    private readonly onEvent: (event: AiSessionLeaseEvent) => void,
+    private readonly store: DestinationLeaseStore,
+    private readonly policy: DestinationLeasePolicy,
+    private readonly onEvent: (event: DestinationLeaseEvent) => void,
   ) {
     this.timer = setInterval(() => void this.renew(), policy.renewIntervalMs);
     this.timer.unref();
