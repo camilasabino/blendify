@@ -154,6 +154,19 @@ describeWithRedis('RedisSpotifyPreviewRepository against real Redis', () => {
     await repository.releaseSaveClaim(id, fresh ?? '');
   });
 
+  it('reports a live save claim as present and an unknown or released one as absent', async () => {
+    const id = randomUUID();
+
+    await expect(repository.hasSaveClaim(id)).resolves.toBe(false);
+
+    const claim = await repository.acquireSaveClaim(id, 5_000);
+    await expect(repository.hasSaveClaim(id)).resolves.toBe(true);
+    await expect(repository.hasSaveClaim(randomUUID())).resolves.toBe(false);
+
+    await repository.releaseSaveClaim(id, claim ?? '');
+    await expect(repository.hasSaveClaim(id)).resolves.toBe(false);
+  });
+
   it('applies outcome writes only to the publishing attempt and never to a settled record', async () => {
     const preview = newPreview();
     await repository.createDestinationIfAbsent(
@@ -251,5 +264,8 @@ describeWithRedis('RedisSpotifyPreviewRepository against real Redis', () => {
         PUBLICATION_OUTCOME_RETENTION_MS,
       ),
     ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' });
+    await expect(unavailable.hasSaveClaim(preview.id)).rejects.toMatchObject({
+      code: 'SERVICE_UNAVAILABLE',
+    });
   });
 });
