@@ -224,7 +224,7 @@ describe('saving a preview', () => {
   it('settles an incomplete outcome that has no Spotify link and offers no new save', async () => {
     stubApi({
       [SAVE_ROUTE]: () =>
-        jsonResponse(previewState({ status: 'publish_incomplete', spotifyUrl: null })),
+        jsonResponse(previewState({ status: 'publish_incomplete', spotifyUrl: null, reason: 'outcome_unknown' })),
     })
     previewReady()
 

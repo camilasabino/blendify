@@ -112,7 +112,7 @@ test.describe('Create with AI destinations', () => {
       await gate
       await route.fulfill({
         json: generatedState({
-          destination: { status: 'published', spotifyUrl: SPOTIFY_URL, savedToLibrary: true },
+          destination: { status: 'published', spotifyUrl: SPOTIFY_URL, savedToLibrary: true, spotifyId: 'playlist-1', coverUploadFailed: false },
         }),
       })
     })

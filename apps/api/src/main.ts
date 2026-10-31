@@ -7,7 +7,6 @@ import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './presentation/filters/global-exception.filter';
 import { createBodyParser } from './presentation/http/body-limits';
 import { enableFrontendCors } from './presentation/http/cors';
-import { rejectLegacyPublishEndpoints } from './presentation/http/legacy-publish-endpoints';
 import { requestCorrelation } from './presentation/http/request-correlation';
 import { parseTrustProxy } from './presentation/request-limits/request-limits.config';
 
@@ -20,7 +19,6 @@ async function bootstrap() {
   app.set('trust proxy', parseTrustProxy(config.get<string>('TRUST_PROXY')));
   app.use(requestCorrelation);
   enableFrontendCors(app, config.getOrThrow<string>('FRONTEND_URL'));
-  app.use(rejectLegacyPublishEndpoints);
   app.use(createBodyParser());
   app.use(cookieParser());
   app.useGlobalFilters(new GlobalExceptionFilter());

@@ -143,7 +143,7 @@ function SettledTracks({
   if (!playlist) {
     return null
   }
-  if (destination.status === 'published' && destination.spotifyId) {
+  if (destination.status === 'published') {
     return (
       <PlaylistPreview
         mode="full"

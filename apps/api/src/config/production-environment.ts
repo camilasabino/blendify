@@ -22,8 +22,6 @@ const REQUIRED_IN_PRODUCTION = [
   'CLIENT_IP_SOURCE',
 ] as const;
 
-const REMOVED_VARIABLES = ['JWT_EXPIRES_IN', 'COOKIE_SECRET', 'API_URL'];
-
 type Environment = Record<string, unknown>;
 
 export function validateEnvironment(env: Environment): Environment {
@@ -36,12 +34,6 @@ export function validateEnvironment(env: Environment): Environment {
   for (const name of REQUIRED_IN_PRODUCTION) {
     if (!read(env, name)) {
       problems.push(`${name} is required`);
-    }
-  }
-
-  for (const name of REMOVED_VARIABLES) {
-    if (read(env, name) !== undefined) {
-      problems.push(`${name} is no longer supported; remove it`);
     }
   }
 

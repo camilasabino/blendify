@@ -722,10 +722,6 @@ export const es: Record<MessageKey, string> = {
   'ai.destination.savedHintLibrary':
     'La playlist ya está en tu cuenta de Spotify y en tu biblioteca.',
   'ai.destination.incompleteTitle': 'No se pudo terminar de guardar en Spotify',
-  'ai.destination.incomplete':
-    'Blendify creó la playlist en Spotify, pero no pudo terminar de guardarla. Ábrela en Spotify para ver qué canciones se agregaron.',
-  'ai.destination.uncertain':
-    'Blendify no pudo confirmar si la playlist se creó en Spotify. Revisa tu cuenta de Spotify antes de crearla de nuevo.',
   'ai.destination.failed':
     'No se pudo guardar la playlist en Spotify. Vuelve a intentarlo.',
   'ai.destination.reconnect':
@@ -1026,8 +1022,6 @@ export const es: Record<MessageKey, string> = {
     'La playlist está en Spotify con todas sus canciones, pero Blendify no pudo añadirla a tu biblioteca.',
   'spotifySave.reason.interrupted':
     'El guardado se interrumpió antes de que Blendify pudiera confirmarlo. La playlist puede existir en tu cuenta de Spotify, así que revisa allí antes de generar de nuevo.',
-  'errors.clientOutdated':
-    'Esta versión de Blendify está desactualizada. Recarga la página para continuar.',
   'runStatus.preview.mix':
     'La vista previa de tu mezcla está lista · sin guardar',
   'runStatus.preview.discover':

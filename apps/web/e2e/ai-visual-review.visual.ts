@@ -364,7 +364,7 @@ test.describe('Create with AI visual review', () => {
       route.fulfill({
         json: generatedState({
           withArtwork: true,
-          destination: { status: 'published', spotifyUrl: SPOTIFY_URL, savedToLibrary: true },
+          destination: { status: 'published', spotifyUrl: SPOTIFY_URL, savedToLibrary: true, spotifyId: 'playlist-1', coverUploadFailed: false },
         }),
       }),
     )
@@ -414,7 +414,7 @@ test.describe('Create with AI visual review', () => {
       page,
       generatedState({
         withArtwork: true,
-        destination: { status: 'publish_incomplete', spotifyUrl: SPOTIFY_URL },
+        destination: { status: 'publish_incomplete', spotifyUrl: SPOTIFY_URL, reason: 'tracks_incomplete' },
       }),
     )
     await expect(page.getByRole('heading', { name: 'Couldn’t finish saving to Spotify' })).toBeVisible()

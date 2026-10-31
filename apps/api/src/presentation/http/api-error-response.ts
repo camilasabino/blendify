@@ -83,7 +83,6 @@ const AI_SESSION_ERROR_STATUS: Record<AiSessionErrorCode, number> = {
 const PREVIEW_ERROR_STATUS: Record<PreviewErrorCode, number> = {
   PREVIEW_NOT_FOUND: HttpStatus.NOT_FOUND,
   PREVIEW_SAVE_IN_PROGRESS: HttpStatus.CONFLICT,
-  CLIENT_OUTDATED: HttpStatus.GONE,
 };
 
 export function toApiErrorResponse(exception: unknown): ApiErrorResponse {

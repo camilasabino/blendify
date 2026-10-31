@@ -51,7 +51,6 @@ export function interruptedGenerationError(): ApiError {
 export const SPOTIFY_OUTCOME_UNKNOWN = 'SPOTIFY_OUTCOME_UNKNOWN'
 export const PREVIEW_NOT_FOUND = 'PREVIEW_NOT_FOUND'
 export const PREVIEW_SAVE_IN_PROGRESS = 'PREVIEW_SAVE_IN_PROGRESS'
-export const CLIENT_OUTDATED = 'CLIENT_OUTDATED'
 
 export type EmptyResultFamily = 'mix' | 'discover'
 
@@ -273,7 +272,6 @@ const STATIC_ERROR_MESSAGES: Record<string, MessageKey> = {
   SPOTIFY_REQUEST_REJECTED: 'errors.spotifyRequestRejected',
   [SPOTIFY_OUTCOME_UNKNOWN]: 'errors.spotifyOutcomeUnknown',
   [INVALID_GENERATION_RESPONSE]: 'errors.invalidGenerationResponse',
-  [CLIENT_OUTDATED]: 'errors.clientOutdated',
   [PREVIEW_NOT_FOUND]: 'spotifyPreview.expired',
   TRANSFER_TOKEN_INVALID: 'transfer.errorInvalid',
   TRANSFER_TOKEN_EXPIRED: 'transfer.errorExpired',

@@ -14,7 +14,6 @@ operations: [`docs/deployment.md`](../../docs/deployment.md).
 - Playlist generation for Mix and Discover (streamed as NDJSON progress).
   Spotify Mode generates a temporary preview (`/api/previews`) and writes to
   Spotify only on an explicit save (`POST /api/previews/:previewId/save`).
-  `POST /api/playlists/mix` and `/discover` answer `410 CLIENT_OUTDATED`.
 - Library, Stats, and playback control.
 - Create with AI sessions: interpretation, clarification, generation,
   refinement, publishing, and transfer (`/api/ai/sessions`).

@@ -271,7 +271,7 @@ export function supportedSelectionFilters(
   };
 }
 
-function selectionFiltersFieldFor(kind: PlaylistKind) {
+function selectionFiltersFor(kind: PlaylistKind) {
   return SelectionFiltersSchema.superRefine((filters, ctx) => {
     for (const filter of activeSelectionFilters(filters)) {
       if (!supportsSelectionFilter(kind, filter)) {
@@ -282,22 +282,25 @@ function selectionFiltersFieldFor(kind: PlaylistKind) {
         });
       }
     }
-  }).default(emptySelectionFilters);
+  });
+}
+
+function selectionFiltersFieldFor(kind: PlaylistKind) {
+  return selectionFiltersFor(kind).default(emptySelectionFilters);
 }
 
 export const GenerationSettingsSchema = z.object({
   version: z.literal(1),
   popularity: PopularityModeSchema,
-  orderMode: TrackOrderModeSchema.default('random'),
+  orderMode: TrackOrderModeSchema,
 });
 
 export const PlaylistGenerationSchema = z.discriminatedUnion('kind', [
   GenerationSettingsSchema.extend({
     kind: z.literal('artist_mix'),
     tracksPerSeed: z.number().int().min(1).max(MAX_TRACKS),
-    // Keep historical generation recipes readable after lowering UI limits.
-    seeds: z.array(ArtistSchema).min(1).max(20),
-    filters: selectionFiltersFieldFor('artist_mix'),
+    seeds: z.array(ArtistSchema).min(1).max(MAX_ARTISTS),
+    filters: selectionFiltersFor('artist_mix'),
   }),
   GenerationSettingsSchema.extend({
     kind: z.literal('genre_mix'),
@@ -305,20 +308,20 @@ export const PlaylistGenerationSchema = z.discriminatedUnion('kind', [
     seeds: z
       .array(GenreSchema.pick({ id: true, name: true }))
       .min(1)
-      .max(10),
-    filters: selectionFiltersFieldFor('genre_mix'),
+      .max(MAX_GENRES),
+    filters: selectionFiltersFor('genre_mix'),
   }),
   GenerationSettingsSchema.extend({
     kind: z.literal('discover_artist'),
     targetTrackCount: DiscoverTrackTargetSchema,
     seed: ArtistSchema,
-    filters: selectionFiltersFieldFor('discover_artist'),
+    filters: selectionFiltersFor('discover_artist'),
   }),
   GenerationSettingsSchema.extend({
     kind: z.literal('discover_track'),
     targetTrackCount: DiscoverTrackTargetSchema,
     seed: TrackSeedSchema,
-    filters: selectionFiltersFieldFor('discover_track'),
+    filters: selectionFiltersFor('discover_track'),
   }),
 ]);
 
@@ -612,7 +615,6 @@ export const SPOTIFY_PUBLISH_INCOMPLETE_REASONS = [
 export const SPOTIFY_PREVIEW_ERROR_CODES = [
   'PREVIEW_NOT_FOUND',
   'PREVIEW_SAVE_IN_PROGRESS',
-  'CLIENT_OUTDATED',
 ] as const;
 
 export const SpotifyPreviewIdSchema = z
@@ -649,13 +651,13 @@ export const SpotifyDestinationSchema = z.discriminatedUnion('status', [
     status: z.literal('published'),
     spotifyUrl: z.string().min(1).nullable(),
     savedToLibrary: z.boolean(),
-    spotifyId: z.string().min(1).optional(),
-    coverUploadFailed: z.boolean().optional(),
+    spotifyId: z.string().min(1),
+    coverUploadFailed: z.boolean(),
   }),
   z.strictObject({
     status: z.literal('publish_incomplete'),
     spotifyUrl: z.string().min(1).nullable(),
-    reason: SpotifyPublishIncompleteReasonSchema.optional(),
+    reason: SpotifyPublishIncompleteReasonSchema,
   }),
 ]);
 

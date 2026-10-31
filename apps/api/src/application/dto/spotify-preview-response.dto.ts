@@ -7,18 +7,7 @@ import type {
   SpotifyPreview,
   SpotifyPreviewPlaylist,
 } from '@/domain/preview/spotify-preview';
-import type {
-  IncompleteSpotifyDestination,
-  PublishedSpotifyDestination,
-  PublishingSpotifyDestination,
-} from '@/domain/publication/spotify-destination';
-
-export type StoredSpotifyDestination =
-  | PublishingSpotifyDestination
-  | (Omit<PublishedSpotifyDestination, 'coverUploadFailed'> &
-      Partial<Pick<PublishedSpotifyDestination, 'coverUploadFailed'>>)
-  | (Omit<IncompleteSpotifyDestination, 'reason'> &
-      Partial<Pick<IncompleteSpotifyDestination, 'reason'>>);
+import type { SpotifyDestination } from '@/domain/publication/spotify-destination';
 
 export function toSpotifyPreviewPlaylistResponse(
   playlist: SpotifyPreviewPlaylist,
@@ -49,7 +38,7 @@ export function toSpotifyPreviewStateResponse(view: {
   previewId: string;
   expiresAt: string;
   playlist: SpotifyPreviewPlaylist | null;
-  destination: StoredSpotifyDestination | null;
+  destination: SpotifyDestination | null;
 }): SpotifyPreviewStateDto {
   return {
     previewId: view.previewId,
@@ -63,9 +52,8 @@ export function toSpotifyPreviewStateResponse(view: {
   };
 }
 
-// AI sessions persisted before reason and coverUploadFailed existed lack both fields.
 export function toSpotifyDestinationResponse(
-  destination: StoredSpotifyDestination,
+  destination: SpotifyDestination,
 ): SpotifyDestinationDto {
   switch (destination.status) {
     case 'publishing':
@@ -75,18 +63,14 @@ export function toSpotifyDestinationResponse(
         status: 'published',
         spotifyUrl: destination.spotifyPlaylist.spotifyUrl,
         savedToLibrary: destination.savedToLibrary,
-        ...(destination.spotifyPlaylist.spotifyId
-          ? { spotifyId: destination.spotifyPlaylist.spotifyId }
-          : {}),
-        ...(destination.coverUploadFailed === undefined
-          ? {}
-          : { coverUploadFailed: destination.coverUploadFailed }),
+        spotifyId: destination.spotifyPlaylist.spotifyId,
+        coverUploadFailed: destination.coverUploadFailed,
       };
     case 'publish_incomplete':
       return {
         status: 'publish_incomplete',
         spotifyUrl: destination.spotifyPlaylist?.spotifyUrl ?? null,
-        ...(destination.reason ? { reason: destination.reason } : {}),
+        reason: destination.reason,
       };
   }
 }

@@ -102,13 +102,6 @@ describe('validateEnvironment', () => {
     );
   });
 
-  it.each(['JWT_EXPIRES_IN', 'COOKIE_SECRET', 'API_URL'])(
-    'rejects the removed variable %s',
-    (name) => {
-      expectInvalid({ [name]: 'value' }, `${name} is no longer supported`);
-    },
-  );
-
   describe('AI service', () => {
     const AI_SERVICE = {
       AI_SERVICE_URL: 'http://ai.railway.internal:8080',

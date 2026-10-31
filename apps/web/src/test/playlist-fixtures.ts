@@ -126,4 +126,5 @@ export const publishedDestination: Extract<SpotifyDestinationDto, { status: 'pub
   spotifyUrl: 'https://open.spotify.com/playlist/playlist-1',
   spotifyId: 'playlist-1',
   savedToLibrary: true,
+  coverUploadFailed: false,
 }

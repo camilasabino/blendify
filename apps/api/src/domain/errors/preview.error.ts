@@ -1,5 +1,4 @@
-export type PreviewErrorCode =
-  'PREVIEW_NOT_FOUND' | 'PREVIEW_SAVE_IN_PROGRESS' | 'CLIENT_OUTDATED';
+export type PreviewErrorCode = 'PREVIEW_NOT_FOUND' | 'PREVIEW_SAVE_IN_PROGRESS';
 
 export class PreviewError extends Error {
   private constructor(
@@ -22,13 +21,6 @@ export class PreviewError extends Error {
     return new PreviewError(
       'PREVIEW_SAVE_IN_PROGRESS',
       'This playlist is already being saved to Spotify.',
-    );
-  }
-
-  static clientOutdated(): PreviewError {
-    return new PreviewError(
-      'CLIENT_OUTDATED',
-      'This version of Blendify is outdated. Reload the page to continue.',
     );
   }
 }

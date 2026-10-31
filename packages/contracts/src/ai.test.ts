@@ -416,11 +416,17 @@ describe('AI session state contract', () => {
           status: 'published',
           spotifyUrl: 'https://open.spotify.com/playlist/p1',
           savedToLibrary: true,
+          spotifyId: 'p1',
+          coverUploadFailed: false,
         },
       },
       {
         ...generated,
-        destination: { status: 'publish_incomplete', spotifyUrl: null },
+        destination: {
+          status: 'publish_incomplete',
+          spotifyUrl: null,
+          reason: 'outcome_unknown',
+        },
       },
       {
         ...generated,

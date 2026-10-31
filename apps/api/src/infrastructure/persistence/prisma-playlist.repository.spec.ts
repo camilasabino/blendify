@@ -51,6 +51,7 @@ function createRepository() {
   const prisma = {
     playlist: {
       findUnique: jest.fn(),
+      findMany: jest.fn(),
       upsert: jest.fn((args: { create: Omit<PlaylistModel, 'id'> }) =>
         Promise.resolve(row(args.create.tracks as unknown[])),
       ),
@@ -64,7 +65,7 @@ function createRepository() {
   };
 }
 
-const legacyTrack = {
+const baseTrack = {
   id: 'track-1',
   name: 'Stay',
   artistId: 'kid-id',
@@ -74,32 +75,17 @@ const legacyTrack = {
   uri: 'spotify:track:track-1',
   albumImageUrl: null,
   previewUrl: null,
+  artists: [{ id: 'kid-id', name: 'The Kid LAROI' }],
 };
 
 describe('PrismaPlaylistRepository track metadata', () => {
-  it('reads tracks persisted before portable metadata existed', async () => {
+  it('keeps a stored 73, a stored zero, and a stored null distinct', async () => {
     const { prisma, repository } = createRepository();
-    prisma.playlist.findUnique.mockResolvedValue(row([legacyTrack]));
-
-    const playlist = await repository.findById('playlist-1');
-    const [track] = playlist?.tracks ?? [];
-
-    expect(track.artistId.getValue()).toBe('kid-id');
-    expect(track.artists).toEqual([{ id: 'kid-id', name: 'The Kid LAROI' }]);
-    expect(track.isrc).toBeUndefined();
-    expect(track.externalUrl).toBeUndefined();
-    expect(track.popularity).toBe(0);
-  });
-
-  it('keeps a stored 73, a stored zero, a stored null, and a missing field distinct', async () => {
-    const { prisma, repository } = createRepository();
-    const { popularity: _storedZero, ...withoutPopularity } = legacyTrack;
     prisma.playlist.findUnique.mockResolvedValue(
       row([
-        { ...legacyTrack, id: 'high', popularity: 73 },
-        { ...legacyTrack, id: 'zero', popularity: 0 },
-        { ...legacyTrack, id: 'unknown', popularity: null },
-        { ...withoutPopularity, id: 'absent' },
+        { ...baseTrack, id: 'high', popularity: 73 },
+        { ...baseTrack, id: 'zero', popularity: 0 },
+        { ...baseTrack, id: 'unknown', popularity: null },
       ]),
     );
 
@@ -108,7 +94,6 @@ describe('PrismaPlaylistRepository track metadata', () => {
     expect(playlist?.tracks.map((track) => track.popularity)).toEqual([
       73,
       0,
-      null,
       null,
     ]);
   });
@@ -227,9 +212,9 @@ describe('PrismaPlaylistRepository.deleteMany', () => {
   });
 });
 
-describe('PrismaPlaylistRepository legacy Genre Mix region', () => {
-  const legacyGenreMixRow = (): PlaylistModel => ({
-    ...row([legacyTrack]),
+describe('PrismaPlaylistRepository Genre Mix region', () => {
+  const genreMixRow = (): PlaylistModel => ({
+    ...row([baseTrack]),
     kind: 'genre_mix',
     seeds: [{ type: 'genre', id: 'rock', name: 'Rock' }],
     generation: {
@@ -239,13 +224,18 @@ describe('PrismaPlaylistRepository legacy Genre Mix region', () => {
       orderMode: TrackOrderMode.RANDOM,
       tracksPerSeed: 10,
       seeds: [{ id: 'rock', name: 'Rock' }],
-      region: 'argentina',
+      filters: {
+        region: 'argentina',
+        femaleVocals: false,
+        releaseRange: null,
+        excludeLive: false,
+      },
     },
   });
 
-  it('reads the legacy region only as filters.region', async () => {
+  it('reads the region as filters.region', async () => {
     const { prisma, repository } = createRepository();
-    prisma.playlist.findUnique.mockResolvedValue(legacyGenreMixRow());
+    prisma.playlist.findUnique.mockResolvedValue(genreMixRow());
 
     const playlist = await repository.findById('playlist-1');
 
@@ -258,7 +248,7 @@ describe('PrismaPlaylistRepository legacy Genre Mix region', () => {
 
   it('keeps the region in the playlist detail summary', async () => {
     const { prisma, repository } = createRepository();
-    prisma.playlist.findUnique.mockResolvedValue(legacyGenreMixRow());
+    prisma.playlist.findUnique.mockResolvedValue(genreMixRow());
 
     const playlist = await repository.findById('playlist-1');
     const detail = PlaylistDetailSchema.parse(toPlaylistDetail(playlist!));
@@ -269,9 +259,9 @@ describe('PrismaPlaylistRepository legacy Genre Mix region', () => {
     expect(detail.generation).not.toHaveProperty('region');
   });
 
-  it('re-serializes a recreated legacy recipe with only filters.region', async () => {
+  it('re-serializes the recipe with only filters.region', async () => {
     const { prisma, repository } = createRepository();
-    prisma.playlist.findUnique.mockResolvedValue(legacyGenreMixRow());
+    prisma.playlist.findUnique.mockResolvedValue(genreMixRow());
     prisma.playlist.upsert.mockImplementation(
       (args: { create: Omit<PlaylistModel, 'id'> }) =>
         Promise.resolve({ ...args.create, id: 'playlist-1' }),
@@ -288,5 +278,80 @@ describe('PrismaPlaylistRepository legacy Genre Mix region', () => {
     expect(saved.generation).toMatchObject({
       filters: { region: 'argentina' },
     });
+  });
+});
+
+describe('PrismaPlaylistRepository unreadable records', () => {
+  const unreadable = (): PlaylistModel => ({
+    ...row([baseTrack]),
+    id: 'unreadable',
+    generation: { kind: 'artist_mix', version: 1 },
+  });
+
+  it('treats an unreadable record as missing', async () => {
+    const { prisma, repository } = createRepository();
+    prisma.playlist.findUnique.mockResolvedValue(unreadable());
+
+    await expect(repository.findById('unreadable')).resolves.toBeNull();
+  });
+
+  it('skips an unreadable record without hiding the readable ones', async () => {
+    const { prisma, repository } = createRepository();
+    prisma.playlist.findMany.mockResolvedValue([
+      unreadable(),
+      row([baseTrack]),
+    ]);
+
+    const playlists = await repository.listLibrary('user-1', {});
+
+    expect(playlists.map((playlist) => playlist.id)).toEqual(['playlist-1']);
+  });
+
+  it('paginates over readable records only', async () => {
+    const { prisma, repository } = createRepository();
+    const readableRow = (id: string) => ({ ...row([baseTrack]), id });
+    prisma.playlist.findMany
+      .mockResolvedValueOnce([
+        { id: 'a', seeds: row([]).seeds, generation },
+        { id: 'unreadable', seeds: row([]).seeds, generation: { kind: 'x' } },
+        { id: 'b', seeds: row([]).seeds, generation },
+        { id: 'c', seeds: row([]).seeds, generation },
+      ])
+      .mockResolvedValueOnce([readableRow('c'), readableRow('b')]);
+
+    const page = await repository.listLibraryPage('user-1', {
+      limit: 2,
+      offset: 1,
+    });
+
+    expect(page.total).toBe(3);
+    expect(page.items.map((playlist) => playlist.id)).toEqual(['b', 'c']);
+    expect(prisma.playlist.findMany).toHaveBeenNthCalledWith(2, {
+      where: { id: { in: ['b', 'c'] } },
+    });
+  });
+
+  it('returns an empty page past the last readable record', async () => {
+    const { prisma, repository } = createRepository();
+    prisma.playlist.findMany.mockResolvedValueOnce([
+      { id: 'a', seeds: row([]).seeds, generation },
+    ]);
+
+    const page = await repository.listLibraryPage('user-1', {
+      limit: 5,
+      offset: 5,
+    });
+
+    expect(page).toEqual({ total: 1, items: [] });
+    expect(prisma.playlist.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not hide database errors', async () => {
+    const { prisma, repository } = createRepository();
+    prisma.playlist.findMany.mockRejectedValue(new Error('connection lost'));
+
+    await expect(
+      repository.listLibraryPage('user-1', { limit: 5, offset: 0 }),
+    ).rejects.toThrow('connection lost');
   });
 });

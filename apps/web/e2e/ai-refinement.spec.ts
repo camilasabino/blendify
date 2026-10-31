@@ -424,6 +424,8 @@ test.describe('Create with AI refinement', () => {
             status: 'published',
             spotifyUrl: 'https://open.spotify.com/playlist/e2e',
             savedToLibrary: true,
+            spotifyId: 'e2e',
+            coverUploadFailed: false,
           },
         },
       }),

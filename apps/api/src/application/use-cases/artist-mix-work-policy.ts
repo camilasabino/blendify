@@ -5,7 +5,6 @@ import {
 } from '@/domain/repositories/catalog-provider.port';
 
 export const ARTIST_MIX_WORK_POLICY = {
-  LEGACY: 'legacy',
   COVERAGE_FIRST_BOUNDED: 'coverage-first-bounded',
 } as const;
 

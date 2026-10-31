@@ -112,9 +112,6 @@ guarantees of other providers. Its model spans use `gen_ai.provider.name=openai`
 and `gen_ai.operation.name=chat` (the GenAI conventions' value for the
 Responses API); because SDK retries are off, each span is one HTTP request.
 
-`AI_PROVIDER_API_KEY` replaces the former `OPENAI_API_KEY`, which is no
-longer read.
-
 ## Local run
 
 ```bash

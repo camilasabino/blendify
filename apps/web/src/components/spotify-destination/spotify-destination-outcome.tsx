@@ -15,14 +15,7 @@ const INCOMPLETE_REASON_KEYS = {
   tracks_incomplete: 'spotifySave.reason.tracksIncomplete',
   library_not_saved: 'spotifySave.reason.libraryNotSaved',
   interrupted: 'spotifySave.reason.interrupted',
-} as const satisfies Record<NonNullable<IncompleteDestination['reason']>, MessageKey>
-
-function incompleteMessageKey(destination: IncompleteDestination, hasLink: boolean): MessageKey {
-  if (destination.reason) {
-    return INCOMPLETE_REASON_KEYS[destination.reason]
-  }
-  return hasLink ? 'ai.destination.incomplete' : 'ai.destination.uncertain'
-}
+} as const satisfies Record<IncompleteDestination['reason'], MessageKey>
 
 export function SpotifyDestinationOutcome({
   destination,
@@ -64,7 +57,7 @@ export function SpotifyDestinationOutcome({
       ? t('ai.destination.savedHintLibrary')
       : t('ai.destination.savedHint')
   } else {
-    message = t(incompleteMessageKey(destination, spotifyUrl !== null))
+    message = t(INCOMPLETE_REASON_KEYS[destination.reason])
   }
 
   return (

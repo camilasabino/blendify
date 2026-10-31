@@ -225,7 +225,6 @@ describe('toApiErrorResponse', () => {
   it.each([
     [PreviewError.notFound(), 404],
     [PreviewError.saveInProgress(), 409],
-    [PreviewError.clientOutdated(), 410],
   ])('maps the preview error %s to its status', (error, statusCode) => {
     expect(toApiErrorResponse(error)).toEqual({
       statusCode,

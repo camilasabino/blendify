@@ -31,8 +31,13 @@ export function readStoredAiSession(): StoredAiSession | null {
       return null
     }
     const parsed: unknown = JSON.parse(raw)
-    return isStoredAiSession(parsed) ? parsed : null
+    if (isStoredAiSession(parsed)) {
+      return parsed
+    }
+    clearStoredAiSession()
+    return null
   } catch {
+    clearStoredAiSession()
     return null
   }
 }

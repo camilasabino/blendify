@@ -80,18 +80,9 @@ describe('RedisAiSessionRepository', () => {
   });
 
   it('ignores records written with another session format', async () => {
-    const { repository } = createRepository({ ...SESSION, version: 0 });
-
-    await expect(repository.find(TOKEN)).resolves.toBeNull();
-  });
-
-  it('treats M3 records without refinement state as expired', async () => {
     const { repository } = createRepository({
       ...SESSION,
-      version: 5,
-      aiSafe: { intent: null },
-      refinementAttempts: undefined,
-      pendingRefinement: undefined,
+      version: AI_SESSION_RECORD_VERSION - 1,
     });
 
     await expect(repository.find(TOKEN)).resolves.toBeNull();

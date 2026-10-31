@@ -278,7 +278,7 @@ describe('Spotify preview session', () => {
     store().beginSave(id)
 
     expect(store().settleSave(id, publishedDestination)).toBe(true)
-    expect(store().settleSave(id, { status: 'publish_incomplete', spotifyUrl: null })).toBe(false)
+    expect(store().settleSave(id, { status: 'publish_incomplete', spotifyUrl: null, reason: 'outcome_unknown' })).toBe(false)
     expect(store().failSave(id, new Error('late'), null)).toBe(false)
 
     expect(session()?.save).toMatchObject({

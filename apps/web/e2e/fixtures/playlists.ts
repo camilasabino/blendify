@@ -1,10 +1,11 @@
-import type {
-  GeneratedPlaylistDto,
-  GenerationProgress,
-  PlaylistDetail,
-  SpotifyDestinationDto,
-  SpotifyPreviewDto,
-  SpotifyPreviewStateDto,
+import {
+  emptySelectionFilters,
+  type GeneratedPlaylistDto,
+  type GenerationProgress,
+  type PlaylistDetail,
+  type SpotifyDestinationDto,
+  type SpotifyPreviewDto,
+  type SpotifyPreviewStateDto,
 } from '@blendify/contracts'
 
 const jazzGeneration: GeneratedPlaylistDto['generation'] = {
@@ -14,6 +15,7 @@ const jazzGeneration: GeneratedPlaylistDto['generation'] = {
   seeds: [{ id: 'jazz', name: 'Jazz' }],
   popularity: 'balanced',
   orderMode: 'random',
+  filters: emptySelectionFilters(),
 }
 
 const jazzTrack: GeneratedPlaylistDto['tracks'][number] = {
@@ -108,4 +110,5 @@ export const publishedDestination: SpotifyDestinationDto = {
   spotifyUrl: 'https://open.spotify.com/playlist/playlist-1',
   spotifyId: 'playlist-1',
   savedToLibrary: true,
+  coverUploadFailed: false,
 }

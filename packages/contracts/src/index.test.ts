@@ -190,7 +190,7 @@ describe('artist contracts', () => {
 });
 
 describe('track contracts', () => {
-  const legacyTrack = {
+  const baseTrack = {
     id: 'track-1',
     name: 'Stay',
     artistId: 'kid-id',
@@ -200,13 +200,13 @@ describe('track contracts', () => {
     uri: 'spotify:track:track-1',
   };
 
-  it('accepts a track without portable metadata', () => {
-    expect(TrackSchema.parse(legacyTrack)).toEqual(legacyTrack);
+  it('accepts a track without optional metadata', () => {
+    expect(TrackSchema.parse(baseTrack)).toEqual(baseTrack);
   });
 
   it('accepts credited artists, isrc and external url', () => {
     const track = {
-      ...legacyTrack,
+      ...baseTrack,
       artists: [
         { id: 'kid-id', name: 'The Kid LAROI' },
         { name: 'Uncredited Id' },
@@ -220,35 +220,35 @@ describe('track contracts', () => {
 
   it('rejects malformed credited artists', () => {
     expect(() =>
-      TrackSchema.parse({ ...legacyTrack, artists: [{ id: 'x' }] }),
+      TrackSchema.parse({ ...baseTrack, artists: [{ id: 'x' }] }),
     ).toThrow();
     expect(() =>
-      TrackSchema.parse({ ...legacyTrack, artists: [{ name: '' }] }),
+      TrackSchema.parse({ ...baseTrack, artists: [{ name: '' }] }),
     ).toThrow();
     expect(() =>
-      TrackSchema.parse({ ...legacyTrack, artists: 'The Kid LAROI' }),
+      TrackSchema.parse({ ...baseTrack, artists: 'The Kid LAROI' }),
     ).toThrow();
   });
 
   it('keeps 73, a real zero, and an unknown score distinct', () => {
-    expect(TrackSchema.parse({ ...legacyTrack, popularity: 73 }).popularity).toBe(
+    expect(TrackSchema.parse({ ...baseTrack, popularity: 73 }).popularity).toBe(
       73,
     );
-    expect(TrackSchema.parse(legacyTrack).popularity).toBe(0);
+    expect(TrackSchema.parse(baseTrack).popularity).toBe(0);
     expect(
-      TrackSchema.parse({ ...legacyTrack, popularity: null }).popularity,
+      TrackSchema.parse({ ...baseTrack, popularity: null }).popularity,
     ).toBeNull();
     expect(
-      TrackSchema.safeParse({ ...legacyTrack, popularity: undefined }).success,
+      TrackSchema.safeParse({ ...baseTrack, popularity: undefined }).success,
     ).toBe(false);
   });
 
   it('accepts an omitted, null, zero, or measured popularity on a track seed', () => {
     const seed = {
-      id: legacyTrack.id,
-      name: legacyTrack.name,
-      artistId: legacyTrack.artistId,
-      artistName: legacyTrack.artistName,
+      id: baseTrack.id,
+      name: baseTrack.name,
+      artistId: baseTrack.artistId,
+      artistName: baseTrack.artistName,
     };
 
     expect(TrackSeedSchema.parse(seed)).not.toHaveProperty('popularity');
@@ -263,7 +263,7 @@ describe('track contracts', () => {
 
   it('keeps portable metadata out of track seeds', () => {
     const seed = TrackSeedSchema.parse({
-      ...legacyTrack,
+      ...baseTrack,
       artists: [{ id: 'kid-id', name: 'The Kid LAROI' }],
       isrc: 'USUM72105936',
       externalUrl: 'https://open.spotify.com/track/track-1',
@@ -343,25 +343,6 @@ describe('selection filter contracts', () => {
     expect(GenerateDiscoverRequestSchema.parse(discoverArtist)).toMatchObject(
       { filters: empty },
     );
-    expect(PlaylistGenerationSchema.parse(recipe)).toMatchObject({
-      filters: empty,
-    });
-  });
-
-  it('normalizes region-only recipes to the current filter shape', () => {
-    expect(
-      PlaylistGenerationSchema.parse({
-        ...recipe,
-        filters: { region: 'argentina' },
-      }),
-    ).toMatchObject({
-      filters: {
-        region: 'argentina',
-        femaleVocals: false,
-        releaseRange: null,
-        excludeLive: false,
-      },
-    });
   });
 
   it('supports artist-level filters only where Blendify discovers the artists', () => {
@@ -582,21 +563,48 @@ describe('selection filter contracts', () => {
     ).toMatchObject({ filters });
   });
 
-  it('normalizes legacy artist mix recipes to inactive filters', () => {
-    const parsed = PlaylistGenerationSchema.parse({
+  it('requires the filters of a persisted recipe and rejects unsupported ones', () => {
+    const recipe = {
       version: 1,
       kind: 'artist_mix',
       tracksPerSeed: 10,
       seeds: [{ id: 'artist-1', name: 'Radiohead' }],
       popularity: 'balanced',
-    });
+      orderMode: 'random',
+    };
 
-    expect(parsed).toMatchObject({ filters: emptySelectionFilters() });
+    expect(PlaylistGenerationSchema.safeParse(recipe).success).toBe(false);
     expect(
       PlaylistGenerationSchema.safeParse({
-        ...parsed,
-        filters: { femaleVocals: true },
+        ...recipe,
+        filters: emptySelectionFilters(),
       }).success,
+    ).toBe(true);
+    expect(
+      PlaylistGenerationSchema.safeParse({
+        ...recipe,
+        filters: { ...emptySelectionFilters(), femaleVocals: true },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('limits persisted seeds to the product limits', () => {
+    const recipe = {
+      version: 1,
+      kind: 'artist_mix',
+      tracksPerSeed: 1,
+      popularity: 'balanced',
+      orderMode: 'random',
+      filters: emptySelectionFilters(),
+    };
+    const artists = (count: number) =>
+      Array.from({ length: count }, (_, i) => ({ id: `a${i}`, name: `A${i}` }));
+
+    expect(
+      PlaylistGenerationSchema.safeParse({ ...recipe, seeds: artists(MAX_ARTISTS) }).success,
+    ).toBe(true);
+    expect(
+      PlaylistGenerationSchema.safeParse({ ...recipe, seeds: artists(MAX_ARTISTS + 1) }).success,
     ).toBe(false);
   });
 });
@@ -672,15 +680,7 @@ describe('guest generation contracts', () => {
     expect(schema.safeParse({ ...body, ...extra }).success).toBe(false);
   });
 
-  it('no longer exports the publish-on-generate contracts', () => {
-    for (const removed of [
-      'CreateMixRequestSchema',
-      'CreateDiscoverRequestSchema',
-      'PublishedPlaylistSchema',
-      'GenerationStreamEventSchema',
-    ]) {
-      expect(contracts).not.toHaveProperty(removed);
-    }
+  it('limits generation progress to the generation phases', () => {
     expect(contracts.GENERATION_PHASES).toEqual([
       'resolving_seeds',
       'matching_tracks',

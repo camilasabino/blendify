@@ -152,25 +152,46 @@ describe('Spotify preview contracts', () => {
 });
 
 describe('Spotify destination contract', () => {
-  it('parses destinations with and without the optional fields', () => {
+  it('parses every destination status', () => {
     const published = {
       status: 'published',
       spotifyUrl: 'https://open.spotify.com/playlist/p1',
       savedToLibrary: false,
+      spotifyId: 'p1',
+      coverUploadFailed: false,
     };
     const incomplete = { status: 'publish_incomplete', spotifyUrl: null };
 
     for (const destination of [
       { status: 'publishing' },
       published,
-      { ...published, spotifyId: 'p1', coverUploadFailed: true },
-      incomplete,
+      { ...published, coverUploadFailed: true },
       ...SPOTIFY_PUBLISH_INCOMPLETE_REASONS.map((reason) => ({
         ...incomplete,
         reason,
       })),
     ]) {
       expect(SpotifyDestinationSchema.parse(destination)).toEqual(destination);
+    }
+  });
+
+  it('requires the fields of a settled destination', () => {
+    for (const invalid of [
+      {
+        status: 'published',
+        spotifyUrl: null,
+        savedToLibrary: true,
+        coverUploadFailed: false,
+      },
+      {
+        status: 'published',
+        spotifyUrl: null,
+        savedToLibrary: true,
+        spotifyId: 'p1',
+      },
+      { status: 'publish_incomplete', spotifyUrl: null },
+    ]) {
+      expect(SpotifyDestinationSchema.safeParse(invalid).success).toBe(false);
     }
   });
 
@@ -191,6 +212,7 @@ describe('Spotify destination contract', () => {
         status: 'published',
         spotifyUrl: null,
         savedToLibrary: true,
+        spotifyId: 'p1',
         coverUploadFailed: false,
       },
       { status: 'publish_incomplete', spotifyUrl: null, reason: 'interrupted' },
@@ -245,7 +267,6 @@ describe('Spotify preview error codes', () => {
     expect(SPOTIFY_PREVIEW_ERROR_CODES).toEqual([
       'PREVIEW_NOT_FOUND',
       'PREVIEW_SAVE_IN_PROGRESS',
-      'CLIENT_OUTDATED',
     ]);
   });
 

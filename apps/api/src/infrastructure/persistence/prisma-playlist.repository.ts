@@ -1,13 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   Playlist as PlaylistModel,
   PlaylistStatus as PrismaStatus,
   Prisma,
 } from '@prisma/client';
-import { PlaylistSeedSchema, type PlaylistSeedDto } from '@blendify/contracts';
+import {
+  PlaylistGenerationSchema,
+  PlaylistSeedSchema,
+  type PlaylistSeedDto,
+} from '@blendify/contracts';
 import { Playlist } from '@/domain/playlist/playlist.entity';
 import { PlaylistName } from '@/domain/value-objects/playlist-name.vo';
-import { readTrackPopularity } from '@/domain/track/track-popularity';
 import { Track, type TrackArtist } from '@/domain/track/track.entity';
 import { ArtistId } from '@/domain/value-objects/artist-id.vo';
 import { TrackId } from '@/domain/value-objects/track-id.vo';
@@ -15,7 +18,6 @@ import {
   PlaylistRepositoryPort,
   type PlaylistLibraryFilter,
 } from '@/domain/repositories/playlist.repository.port';
-import { parsePersistedGeneration } from './persisted-playlist-generation';
 import { PrismaService } from './prisma.service';
 
 interface TrackJson {
@@ -29,13 +31,15 @@ interface TrackJson {
   albumName?: string;
   albumImageUrl?: string | null;
   previewUrl?: string | null;
-  artists?: TrackArtist[];
+  artists: TrackArtist[];
   isrc?: string | null;
   externalUrl?: string | null;
 }
 
 @Injectable()
 export class PrismaPlaylistRepository implements PlaylistRepositoryPort {
+  private readonly logger = new Logger(PrismaPlaylistRepository.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async save(playlist: Playlist): Promise<Playlist> {
@@ -88,7 +92,7 @@ export class PrismaPlaylistRepository implements PlaylistRepositoryPort {
 
   async findById(id: string): Promise<Playlist | null> {
     const row = await this.prisma.playlist.findUnique({ where: { id } });
-    return row ? this.toDomain(row) : null;
+    return row && this.isReadable(row) ? this.toDomain(row) : null;
   }
 
   async listLibrary(
@@ -99,24 +103,37 @@ export class PrismaPlaylistRepository implements PlaylistRepositoryPort {
       where: this.libraryWhere(userId, filter),
       orderBy: { createdAt: 'desc' },
     });
-    return rows.map((row) => this.toDomain(row));
+    return rows
+      .filter((row) => this.isReadable(row))
+      .map((row) => this.toDomain(row));
   }
 
   async listLibraryPage(
     userId: string,
     query: { limit: number; offset: number; q?: string },
   ): Promise<{ items: Playlist[]; total: number }> {
-    const where = this.libraryWhere(userId, { q: query.q });
-    const [total, rows] = await this.prisma.$transaction([
-      this.prisma.playlist.count({ where }),
-      this.prisma.playlist.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        take: query.limit,
-        skip: query.offset,
-      }),
-    ]);
-    return { total, items: rows.map((row) => this.toDomain(row)) };
+    const candidates = await this.prisma.playlist.findMany({
+      where: this.libraryWhere(userId, { q: query.q }),
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, seeds: true, generation: true },
+    });
+    const readableIds = candidates
+      .filter((candidate) => this.isReadable(candidate))
+      .map((candidate) => candidate.id);
+    const pageIds = readableIds.slice(query.offset, query.offset + query.limit);
+    if (pageIds.length === 0) {
+      return { total: readableIds.length, items: [] };
+    }
+
+    const rows = await this.prisma.playlist.findMany({
+      where: { id: { in: pageIds } },
+    });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const items = pageIds.flatMap((id) => {
+      const row = byId.get(id);
+      return row ? [this.toDomain(row)] : [];
+    });
+    return { total: readableIds.length, items };
   }
 
   async deleteFailedByUserId(userId: string): Promise<number> {
@@ -152,9 +169,21 @@ export class PrismaPlaylistRepository implements PlaylistRepositoryPort {
     };
   }
 
+  private isReadable(
+    row: Pick<PlaylistModel, 'id' | 'seeds' | 'generation'>,
+  ): boolean {
+    const readable =
+      PlaylistSeedSchema.array().safeParse(row.seeds).success &&
+      PlaylistGenerationSchema.safeParse(row.generation).success;
+    if (!readable) {
+      this.logger.warn(`Skipping unreadable playlist record ${row.id}`);
+    }
+    return readable;
+  }
+
   private toDomain(row: PlaylistModel): Playlist {
     const seeds = parseSeeds(row.seeds);
-    const generation = parsePersistedGeneration(row.generation);
+    const generation = PlaylistGenerationSchema.parse(row.generation);
     const tracks = row.tracks as unknown as TrackJson[];
     return Playlist.rehydrate({
       id: row.id,
@@ -171,7 +200,7 @@ export class PrismaPlaylistRepository implements PlaylistRepositoryPort {
           artistId: ArtistId.create(track.artistId),
           artistName: track.artistName,
           durationMs: track.durationMs,
-          popularity: readTrackPopularity(track.popularity),
+          popularity: track.popularity,
           uri: track.uri,
           albumName: track.albumName,
           albumImageUrl: track.albumImageUrl ?? undefined,

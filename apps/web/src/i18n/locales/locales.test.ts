@@ -93,38 +93,6 @@ describe('locale contracts', () => {
       'ai.suggestion.discoverArtist',
       'ai.suggestion.discoverTrack',
     ] as const
-    const retired = [
-      '30 deep cuts from Radiohead and Interpol',
-      '30 deep cuts from Radiohead and Interpol, no Coldplay',
-      'Shoegaze and dream pop, around 40 songs',
-      'Music similar to Björk',
-      'Music similar to Björk, lesser-known, from the ’90s and 2000s',
-      'Start from Teardrop by Massive Attack',
-      '20 songs similar to Teardrop by Massive Attack, no live versions',
-      'Argentine rock from the ’80s and ’90s, female vocals, no live versions',
-      'For example: 30 deep cuts from Radiohead and Interpol, no Coldplay',
-      'For example: 25 British indie rock tracks from 2000 to 2015, a mix of hits and deep cuts, in shuffled order',
-      '30 canciones menos conocidas de Radiohead e Interpol',
-      '30 canciones menos conocidas de Soda Stereo y Los Fabulosos Cadillacs, sin Maná',
-      'Shoegaze y dream pop, unas 40 canciones',
-      'Música parecida a Björk',
-      'Música parecida a Björk, menos conocida, de los 90 y los 2000',
-      'Empezar desde Teardrop de Massive Attack',
-      '20 canciones parecidas a Teardrop de Massive Attack, sin versiones en vivo',
-      'Rock argentino de los 80 y 90, voces femeninas, sin versiones en vivo',
-      'Por ejemplo: 30 canciones menos conocidas de Soda Stereo y Los Fabulosos Cadillacs, nada de Maná',
-      'Por ejemplo: 25 canciones de indie rock británico entre 2000 y 2015, mezcla de éxitos y temas menos conocidos, en orden aleatorio',
-      '30 músicas menos conhecidas de Radiohead e Interpol',
-      '30 músicas menos conhecidas de Caetano Veloso e Gilberto Gil, sem Roberto Carlos',
-      'Shoegaze e dream pop, umas 40 músicas',
-      'Músicas parecidas com Björk',
-      'Músicas parecidas com Björk, menos conhecidas, dos anos 90 e dos anos 2000',
-      'Começar por Teardrop, de Massive Attack',
-      '20 músicas parecidas com Teardrop, do Massive Attack, sem versões ao vivo',
-      'Rock argentino dos anos 80 e 90, vozes femininas, sem versões ao vivo',
-      'Por exemplo: 30 músicas menos conhecidas de Caetano Veloso e Gilberto Gil, sem Roberto Carlos',
-      'Por exemplo: 25 músicas de indie rock britânico entre 2000 e 2015, mistura de sucessos e músicas menos conhecidas, em ordem aleatória',
-    ]
     const dropped = [
       /sin maná/i,
       /nada de maná/i,
@@ -226,9 +194,6 @@ describe('locale contracts', () => {
       for (const example of examples) {
         expect(example.trim().length).toBeGreaterThan(0)
         expect(example).not.toMatch(/artist mix|genre mix|discover|familiarity|familiaridad|familiaridade/i)
-      }
-      for (const previous of retired) {
-        expect(onboarding).not.toContain(previous)
       }
       for (const pattern of dropped) {
         for (const line of onboarding) {

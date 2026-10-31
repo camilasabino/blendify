@@ -674,7 +674,7 @@ describe('Guest Mode HTTP boundary', () => {
       },
     );
 
-    it('rejects a legacy top-level region on a Genre Mix request', async () => {
+    it('rejects a top-level region on a Genre Mix request', async () => {
       const response = await request(httpServer())
         .post('/api/generate/mix')
         .set('Origin', FRONTEND)

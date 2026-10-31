@@ -1156,9 +1156,11 @@ describe('Create with AI sessions over HTTP', () => {
       const idAsKey = await request(server())
         .get(`${SESSIONS_PATH}/${id}`)
         .set(AI_SESSION_KEY_HEADER, id);
-      const legacyPath = await request(server()).get(`${SESSIONS_PATH}/${key}`);
+      const keyAsPathId = await request(server()).get(
+        `${SESSIONS_PATH}/${key}`,
+      );
 
-      for (const response of [noKey, idAsKey, legacyPath]) {
+      for (const response of [noKey, idAsKey, keyAsPathId]) {
         expect(response.status).toBe(404);
         expect(response.body).toMatchObject({ code: 'AI_SESSION_NOT_FOUND' });
       }
@@ -1734,52 +1736,6 @@ describe('Create with AI sessions over HTTP', () => {
       expect(JSON.stringify(restoredBody)).not.toMatch(
         /publishedAt|startedAt|attemptId/,
       );
-    });
-
-    it('reads a session persisted before the optional destination fields existed', async () => {
-      await restartWithGenerationLimit(5);
-      const owner = await sessionCookie('user-1');
-      const published = await generatedSession(owner);
-      const incomplete = await generatedSession(owner);
-      await publish(published, PUBLISH, owner).expect(200);
-      world.spotify.addTracksToPlaylist.mockRejectedValueOnce(
-        new Error('Spotify addTracksToPlaylist failed (500): boom'),
-      );
-      await publish(incomplete, PUBLISH, owner).expect(200);
-      const strip = (key: string, ...fields: string[]) => {
-        const record = world.stored.get(key)!;
-        const destination = { ...record.destination } as Record<
-          string,
-          unknown
-        >;
-        for (const field of fields) {
-          delete destination[field];
-        }
-        world.stored.set(key, {
-          ...record,
-          destination: destination as unknown as typeof record.destination,
-        });
-      };
-      strip(published, 'coverUploadFailed');
-      strip(incomplete, 'reason');
-
-      const publishedState = AiSessionStateSchema.parse(
-        (await readSession(published, owner).expect(200)).body,
-      );
-      const incompleteState = AiSessionStateSchema.parse(
-        (await readSession(incomplete, owner).expect(200)).body,
-      );
-
-      expect(publishedState.destination).toEqual({
-        status: 'published',
-        spotifyUrl: SPOTIFY_PLAYLIST.url,
-        savedToLibrary: true,
-        spotifyId: SPOTIFY_PLAYLIST.id,
-      });
-      expect(incompleteState.destination).toEqual({
-        status: 'publish_incomplete',
-        spotifyUrl: SPOTIFY_PLAYLIST.url,
-      });
     });
 
     it('keeps the playlist out of the Library when the user preference says so', async () => {

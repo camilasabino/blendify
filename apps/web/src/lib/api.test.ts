@@ -442,16 +442,14 @@ describe('Spotify preview contracts', () => {
     })
   })
 
-  it('accepts destinations that lack the newer optional fields', async () => {
-    stubSuccessfulFetch(
-      previewState({
-        status: 'publish_incomplete',
-        spotifyUrl: null,
-      }),
-    )
-
-    await expect(api.getSpotifyPreview(PREVIEW_ID)).resolves.toMatchObject({
+  it('rejects an incomplete destination without a reason as an invalid response', async () => {
+    stubSuccessfulFetch({
+      ...previewState(null),
       destination: { status: 'publish_incomplete', spotifyUrl: null },
+    })
+
+    await expect(api.getSpotifyPreview(PREVIEW_ID)).rejects.toMatchObject({
+      code: 'INVALID_GENERATION_RESPONSE',
     })
   })
 

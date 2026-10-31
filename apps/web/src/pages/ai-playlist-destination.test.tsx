@@ -189,7 +189,7 @@ describe('Create with AI Spotify destination', () => {
     expect(screen.queryByRole('button', { name: 'Edit title' })).toBeNull()
 
     resolvePublish(
-      jsonResponse(stateWith({ status: 'published', spotifyUrl: SPOTIFY_URL, savedToLibrary: true })),
+      jsonResponse(stateWith({ status: 'published', spotifyUrl: SPOTIFY_URL, savedToLibrary: true, spotifyId: 'playlist-1', coverUploadFailed: false })),
     )
 
     const saved = await screen.findByRole('heading', { name: 'Saved to Spotify' })
@@ -212,7 +212,7 @@ describe('Create with AI Spotify destination', () => {
     const user = userEvent.setup()
     const { calls } = await renderGenerated({
       [PUBLISH_ROUTE]: () =>
-        jsonResponse(stateWith({ status: 'published', spotifyUrl: SPOTIFY_URL, savedToLibrary: false })),
+        jsonResponse(stateWith({ status: 'published', spotifyUrl: SPOTIFY_URL, savedToLibrary: false, spotifyId: 'playlist-1', coverUploadFailed: false })),
     })
 
     expect(
@@ -261,7 +261,7 @@ describe('Create with AI Spotify destination', () => {
     const user = userEvent.setup()
     const states = [
       stateWith(null),
-      stateWith({ status: 'published', spotifyUrl: SPOTIFY_URL, savedToLibrary: true }),
+      stateWith({ status: 'published', spotifyUrl: SPOTIFY_URL, savedToLibrary: true, spotifyId: 'playlist-1', coverUploadFailed: false }),
     ]
     const { calls } = await renderGenerated({
       [SESSION_ROUTE]: () => jsonResponse(states.length > 1 ? states.shift() : states[0]),
@@ -322,7 +322,7 @@ describe('Create with AI Spotify destination', () => {
   it('restores a published playlist without publishing again', async () => {
     const { calls } = await renderGenerated(
       {},
-      { state: stateWith({ status: 'published', spotifyUrl: SPOTIFY_URL, savedToLibrary: true }) },
+      { state: stateWith({ status: 'published', spotifyUrl: SPOTIFY_URL, savedToLibrary: true, spotifyId: 'playlist-1', coverUploadFailed: false }) },
     )
 
     expect(screen.getByRole('heading', { name: 'Saved to Spotify' })).not.toHaveFocus()
@@ -333,14 +333,14 @@ describe('Create with AI Spotify destination', () => {
   it('explains a partial or uncertain publish without offering a retry', async () => {
     await renderGenerated(
       {},
-      { state: stateWith({ status: 'publish_incomplete', spotifyUrl: SPOTIFY_URL }) },
+      { state: stateWith({ status: 'publish_incomplete', spotifyUrl: SPOTIFY_URL, reason: 'tracks_incomplete' }) },
     )
 
     const section = screen
       .getByRole('heading', { name: 'Couldn’t finish saving to Spotify' })
       .closest('section') as HTMLElement
     expect(within(section).getByRole('alert')).toHaveTextContent(
-      'Blendify created the playlist on Spotify but couldn’t finish saving it.',
+      'The playlist exists on Spotify, but some songs may be missing.',
     )
     expect(within(section).getByRole('link', { name: /Open in Spotify/ })).toHaveAttribute(
       'href',
@@ -350,10 +350,10 @@ describe('Create with AI Spotify destination', () => {
   })
 
   it('reports an uncertain publish without a Spotify link', async () => {
-    await renderGenerated({}, { state: stateWith({ status: 'publish_incomplete', spotifyUrl: null }) })
+    await renderGenerated({}, { state: stateWith({ status: 'publish_incomplete', spotifyUrl: null, reason: 'outcome_unknown' }) })
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Blendify couldn’t confirm whether the playlist was created on Spotify.',
+      'Spotify didn’t confirm whether the playlist was created',
     )
     expect(screen.queryByRole('link', { name: /Open in Spotify/ })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Save to Spotify' })).toBeNull()

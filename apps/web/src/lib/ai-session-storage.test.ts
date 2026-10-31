@@ -38,15 +38,6 @@ describe('ai session storage', () => {
     expect(readStoredAiSession()).toBeNull()
   })
 
-  it('drops a stored session that predates the separate access key', () => {
-    sessionStorage.setItem(
-      'blendify.aiSession',
-      JSON.stringify({ sessionId: 'legacy-token', prompt: 'Music like Björk', playlistTitle: null }),
-    )
-
-    expect(readStoredAiSession()).toBeNull()
-  })
-
   it('tolerates unavailable storage', () => {
     const blocked = () => {
       throw new Error('blocked')

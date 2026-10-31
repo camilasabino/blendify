@@ -752,7 +752,6 @@ With `NODE_ENV=production` the API refuses to start
 - `JWT_SECRET` is shorter than 32 characters or equals the example value;
 - `TRUST_PROXY` is `false`/`0` or invalid (`true` is always rejected);
 - `CLIENT_IP_SOURCE` is not `express` or `railway-x-forwarded-for`;
-- a removed variable is still set: `JWT_EXPIRES_IN`, `COOKIE_SECRET`, `API_URL`;
 - `AI_SERVICE_URL` is set but is not an `http(s)` URL without credentials, or
   `AI_SERVICE_TOKEN` is shorter than 32 characters (both are optional; see
   [AI service](#19-ai-service)).
@@ -943,8 +942,8 @@ Testing).
 - [ ] `npx prisma migrate status` against production → up to date.
 - [ ] Redis over Railway SSH (section 6): 256 MiB `maxmemory`,
       `noeviction`, RDB/AOF disabled, 512 MiB container limit.
-- [ ] Spotify previews (R1 only): see
-      [section 20.6](#206-r1-verification).
+- [ ] Spotify previews: see
+      [section 20.6](#206-verification).
 - [ ] Optional, in a quiet window: stop Redis → generation returns
       `503 SERVICE_UNAVAILABLE`, search keeps answering; start Redis → both
       recover without an API restart.
@@ -995,8 +994,7 @@ Production starts with the M5 defaults and one API replica:
 | Generation concurrency | 2 per client, 6 global | fail-closed |
 
 `publish` is shared by Create with AI publish and Spotify preview save (see
-[section 20.4](#204-publish-quota)). Create with AI publish no longer uses the
-`generation` bucket.
+[section 20.4](#204-publish-quota)).
 
 Observe before changing anything (`RATE_LIMIT_OVERRIDES`,
 `GENERATION_CONCURRENCY_*`):
@@ -1271,14 +1269,6 @@ model request, for example
 `INFO:httpx2:HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"`.
 It contains the method, URL and status only (no prompt, output, headers or
 credentials) and is left as is.
-
-Migrating from `OPENAI_API_KEY`: the service no longer reads `OPENAI_API_KEY`;
-`AI_PROVIDER_API_KEY` replaces it with the same value. With `AI_PROVIDER=openai`
-the new code refuses to start without `AI_PROVIDER_API_KEY`, so before
-deploying a release that includes this change, add the sealed
-`AI_PROVIDER_API_KEY` on `ai` (the previous release ignores it), deploy, check
-the health check, then delete `OPENAI_API_KEY`. Apply `.railway/railway.ts`
-only after the variable exists, because `preserve()` declares a value but never creates it.
 
 ### 19.4 Health
 
@@ -1662,31 +1652,21 @@ No GitHub eval workflow exists yet. If one is added, it must be a separate
 
 ## 20. Spotify previews (Mix and Discover, Spotify Mode)
 
-Spotify Mode Mix and Discover move from "generate and publish" to "generate →
-preview → Save to Spotify". The work ships in four deploys (R1–R4). This
-section covers R1 to R3 and the contract with R4.
+In Spotify Mode, Mix and Discover generate a temporary preview and write to
+Spotify only on an explicit Save to Spotify. Nothing is created on Spotify
+when a preview is generated.
 
-### 20.1 Endpoints and rollout status
+### 20.1 Endpoints
 
 All routes require the session cookie and the origin/CSRF guard. They are in
 `apps/api/src/presentation/controllers/previews.controller.ts`.
 
-| Route | Purpose | Limits | Status |
-|---|---|---|---|
-| `POST /api/previews/mix` | Generate a Mix preview (JSON or NDJSON progress) | `generation` bucket, generation concurrency | R1: deployed with the API; used by the web since R2 |
-| `POST /api/previews/discover` | Generate a Discover preview | same | R1 |
-| `GET /api/previews/:previewId` | Read the preview and its save outcome | none | R1 |
-| `POST /api/previews/:previewId/save` | Publish the stored preview to Spotify | `publish` bucket (new attempts only), generation concurrency | R1 |
-| `POST /api/playlists/mix`, `POST /api/playlists/discover` | Retired publish-on-generate routes: `410 CLIENT_OUTDATED` | none | R3 (section 20.9) |
-
-Rollout:
-
-| Step | What | Status |
+| Route | Purpose | Limits |
 |---|---|---|
-| R1 | API adds the preview routes, the shared publication runner and the `publish` bucket. Legacy `POST /api/playlists/mix|discover` unchanged. Create with AI wire shape unchanged | Deployed |
-| R2 | Web switches to `/api/previews/*` | Deployed |
-| R3 | Legacy routes answer `410 CLIENT_OUTDATED`; old code removed; Create with AI responses carry the optional destination fields | Implemented locally (M-D), not deployed |
-| R4 | `410` stubs removed | Not started |
+| `POST /api/previews/mix` | Generate a Mix preview (JSON or NDJSON progress) | `generation` bucket, generation concurrency |
+| `POST /api/previews/discover` | Generate a Discover preview | same |
+| `GET /api/previews/:previewId` | Read the preview and its save outcome | none |
+| `POST /api/previews/:previewId/save` | Publish the stored preview to Spotify | `publish` bucket (new attempts only), generation concurrency |
 
 Save never regenerates: it publishes the stored tracks, order and recipe, and
 it creates at most one Spotify playlist per preview. Spotify has no
@@ -1695,8 +1675,8 @@ reports `publish_incomplete` (`outcome_unknown`) and never retries.
 
 ### 20.2 Configuration
 
-R1 adds no environment variable and no IaC change. It needs the existing
-production configuration:
+Previews need no environment variable of their own and no PostgreSQL
+migration. They rely on the existing production configuration:
 
 - `REDIS_URL` (required by startup validation, section 8.6). With
   `NODE_ENV=production`, coordination writes (preview save claim,
@@ -1704,10 +1684,8 @@ production configuration:
   ready they return `503 SERVICE_UNAVAILABLE` instead of falling back to
   process memory. Outside production they fall back to memory.
 - `RATE_LIMIT_OVERRIDES` stays optional and unset. `publish=<limit>/<seconds>`
-  is now a valid entry. Check in the Railway dashboard that no override sets
+  is a valid entry. Check in the Railway dashboard that no override sets
   `publish` unintentionally; the IaC does not manage this variable.
-- No PostgreSQL migration. `preDeployCommand` (`prisma migrate deploy`) finds
-  nothing to apply.
 
 ### 20.3 Redis keys, TTL and memory
 
@@ -1718,7 +1696,7 @@ production configuration:
 | `blendify:preview:spotify:v1:{id}:claim` | random claim id | 30 s lease, renewed every 10 s | bytes |
 
 Create with AI keys (`blendify:ai:session…`, `…:destination-claim`) are
-unchanged. The destination record outlives the preview on purpose, so an
+separate. The destination record outlives the preview on purpose, so an
 expired preview still reports how its save ended.
 
 Memory at current scale: a user can create about 12 previews per 10 minutes
@@ -1729,8 +1707,10 @@ at most 12 destination records per 10 minutes over 24 hours (1,728 records,
 save return `503`, and no key is evicted. Watch `used_memory` and
 `request_limit.store_unavailable` as in section 6.
 
-Records are stored under the version in the key (`v1`). A shape change bumps
-the version; old records are treated as missing.
+Every preview, destination and Create with AI record carries a `version`. A
+record with a different version is treated as missing (`404`, shown as
+expired); there are no compatibility readers, and a shape change bumps the
+version.
 
 ### 20.4 Publish quota
 
@@ -1753,33 +1733,32 @@ Exceptional cases that do consume one unit:
 The unit is consumed before the conditional start of the attempt record, so
 the two exceptional paths above can spend a unit without any publication
 starting. They are rare (a lost lease, a Redis failure between claim and
-start) and bounded by the 12-per-10-minutes limit. The retired legacy routes
-(section 20.9) never touch the bucket.
+start) and bounded by the 12-per-10-minutes limit.
 
 Raising or lowering the limit: `RATE_LIMIT_OVERRIDES=publish=<limit>/<seconds>`
 (a variable change redeploys the API).
 
-### 20.5 R1 deployment sequence
+### 20.5 Deployment
 
 1. Confirm the local gates passed for the commits being shipped (full suite
-   and the Redis integration tests); do not rerun them for a docs-only change.
+   and, when Redis or publication coordination changed, the Redis integration
+   tests); do not rerun them for a docs-only change.
 2. Merge to `main` with green CI. One push triggers two independent
    deployments, because both wait on the same CI run:
-   - Railway `api` (section 4.9): the commit touches `apps/api/**` and
-     `packages/contracts/**`, so the API builds, runs the empty pre-deploy
-     migration, and receives traffic after `GET /api/health` returns `200`.
-     The `ai` service is `SKIPPED`.
-   - `deploy-web.yml` (section 3.1): it runs on every green push to `main`,
-     whatever paths changed, and redeploys the SPA from the same sources
-     plus the rebuilt `@blendify/contracts`. The web code does not change
-     behavior (it never calls a preview route), so this is a no-op redeploy.
+   - Railway `api` (section 4.9): when the commit touches `apps/api/**` or
+     `packages/contracts/**`, the API builds, runs the pre-deploy migration,
+     and receives traffic after `GET /api/health` returns `200`. The `ai`
+     service is `SKIPPED` unless its paths changed.
+   - `deploy-web.yml` (section 3.1): it runs on every green push to `main`
+     and redeploys the SPA from the same sources plus the rebuilt
+     `@blendify/contracts`.
 3. Watch the Railway deployment until it is `SUCCESS` and the previous one is
-   removed. Do not apply IaC (nothing in `.railway/` changed).
+   removed. Do not apply IaC unless `.railway/` changed.
 4. Run the verification in section 20.6.
 
 A docs-only commit does not redeploy the API (no watched path changes).
 
-### 20.6 R1 verification
+### 20.6 Verification
 
 Non-destructive; no Spotify write and no generation:
 
@@ -1792,24 +1771,20 @@ Non-destructive; no Spotify write and no generation:
 - [ ] No session cookie from the allowed origin → `401`:
       `curl -si https://api.blendify.camilasabino.dev/api/previews/AAAAAAAAAAAAAAAAAAAAAA -H 'Origin: https://blendify.camilasabino.dev'`
       (a 22-character id).
-- [ ] The web still loads and the legacy flows are unchanged (section 13,
-      Spotify Mode): Mix/Discover publish through the legacy routes, Create
-      with AI publish works, Library and Stats load. (R1 only; after R2 the
-      web uses previews and after R3 the legacy routes answer `410`.)
+- [ ] The web still loads (hard reload on `/app/mix`).
 - [ ] Optional, with an allowlisted session and the user's explicit
       decision: `GET /api/previews/<unknown 22-character id>` → `404
       PREVIEW_NOT_FOUND`.
 
-Do not create a preview in production to test it: functional behavior is
-validated locally (see the section 13 intro).
+Do not create a preview or a playlist in production to test it: functional
+behavior is validated locally (see the section 13 intro).
 
 ### 20.7 Rollback
 
 | Situation | Action |
 |---|---|
-| Problem after R1 | Roll back the API (Railway → `api` → Deployments → previous successful). The web does not use previews, so there is no user impact. Preview records expire on their own (30 min / 24 h). Create with AI records written by R1 may carry extra optional fields; the previous code ignores them |
-| Problem after R2 | Roll back the **web first**, then the API if needed. The reverse order leaves the new web against an API without previews |
-| Problem after R3 | Roll back the API to R2 (legacy routes return, Create with AI responses lose the optional destination fields). Both web versions then work. Never roll the web back past R2 while the API is at R3: the old web would receive `410` |
+| Problem after an API deploy | Roll back the API (Railway → `api` → Deployments → previous successful). The target must expose `/api/previews/*`, because the web uses only those routes. Preview and Create with AI records expire on their own (30 min / 24 h); a record written under another version is treated as missing |
+| Problem after a web deploy | Roll back the web to the previous successful deployment. The API does not depend on the web version |
 | Publish abuse or Spotify quota pressure | `RATE_LIMIT_OVERRIDES=publish=1/3600` on `api` (redeploys) |
 | Redis memory pressure | Section 6; previews and destinations expire on their own, nothing to purge |
 
@@ -1839,70 +1814,5 @@ There is no data rollback: Redis records expire and PostgreSQL is untouched.
 - **Single replica.** The lease and fail-closed behavior assume one API
   replica, as in production today.
 - **Account deletion** does not purge preview or destination keys; they
-  expire on their own. Privacy copy for this ships in R2.
-- **Statistics** count published playlists only once the web switches (R2).
-
-### 20.9 R3 — retired publish-on-generate routes
-
-R3 removes the generate-and-publish backend. It needs no environment variable,
-no IaC change and no PostgreSQL migration. It can ship after a successful
-operational preflight and explicit deployment authorization; no minimum time
-after R2 is required. A browser tab still running an older bundle receives
-`410 CLIENT_OUTDATED` and must be reloaded.
-
-Rolling back the API to R2 remains supported. Rolling back the web to a version
-older than R2 while the API is at R3 is not supported: restore a compatible API
-first.
-
-**Legacy routes.** `POST /api/playlists/mix` and `POST /api/playlists/discover`
-answer `410` with the normal error envelope:
-
-```json
-{ "statusCode": 410, "code": "CLIENT_OUTDATED", "message": "This version of Blendify is outdated. Reload the page to continue." }
-```
-
-They are handled by `rejectLegacyPublishEndpoints`
-(`apps/api/src/presentation/http/legacy-publish-endpoints.ts`), an Express
-middleware registered in `main.ts` after CORS and before the body parser. The
-response therefore comes before body parsing, authentication, the origin
-guard, rate limiting, generation concurrency, generation and any provider
-call. Any body is accepted (oversized or malformed included), nothing is
-charged to any bucket, and the CORS headers stay on the response so an old tab
-can read the `410`. An old tab treats the response as a definite failure, not
-an uncertain one, so it neither recreates the playlist nor writes anything.
-
-**Event.** Each rejection logs `legacy_publish_endpoint.rejected` with
-`requestId` and `endpoint` (`mix` or `discover`). It carries no user, session,
-playlist name, seed or body content. R4 may ship after 7 days with zero such
-events.
-
-**Removed in R3:** `CreateSpotifyPlaylistUseCase`, the `CreateMixRequest`,
-`CreateDiscoverRequest`, `PublishedPlaylist` and `GenerationStreamEvent`
-contracts, the `publishing` generation phase and the publish progress
-tracking, and the two legacy body-limit entries.
-
-**Create with AI.** The session response now carries the optional destination
-fields: `spotifyId` and `coverUploadFailed` on `published`, `reason` on
-`publish_incomplete`. A session stored before those fields existed omits them
-(the contract keeps them optional). Generation and publication behavior is
-unchanged. A bundle older than R2 may fail to parse the added fields and
-recovers on reload.
-
-**Verification (non-destructive, no session needed):**
-
-- [ ] `GET /api/health` → `200`, `database: up`.
-- [ ] `curl -si -X POST https://api.blendify.camilasabino.dev/api/playlists/mix -H 'Origin: https://blendify.camilasabino.dev' -H 'Content-Type: application/json' -d '{}'`
-      → `410` with `"code":"CLIENT_OUTDATED"`, no `Set-Cookie`, and
-      `Access-Control-Allow-Origin: https://blendify.camilasabino.dev`.
-- [ ] The same request to `/api/playlists/discover` → `410`.
-- [ ] Railway logs show `legacy_publish_endpoint.rejected` for those calls and
-      no sensitive field in it.
-- [ ] The web still loads (hard reload on `/app/mix`).
-
-Do not create a playlist in production to test it.
-
-**R3 grep gate.** Before review the repository has no reference to
-`CreateSpotifyPlaylistUseCase`, `CreateMixRequest`, `CreateDiscoverRequest`,
-`GenerationStreamEventSchema`, `PublishedPlaylist` (outside the publication
-service type), `createMix`, `createDiscover` or the `'publishing'` generation
-phase, apart from the retired-route middleware and its tests.
+  expire on their own.
+- **Statistics** count published playlists only; an unsaved preview is not counted.

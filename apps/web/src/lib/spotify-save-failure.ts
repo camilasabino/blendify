@@ -1,6 +1,5 @@
 import {
   ApiError,
-  CLIENT_OUTDATED,
   PREVIEW_NOT_FOUND,
   PREVIEW_SAVE_IN_PROGRESS,
 } from '@/lib/api-error'
@@ -21,7 +20,6 @@ const DEFINITE_FAILURE_CODES = new Set([
   'SPOTIFY_REAUTH_REQUIRED',
   'SPOTIFY_RATE_LIMITED',
   'SPOTIFY_QUOTA_EXCEEDED',
-  CLIENT_OUTDATED,
 ])
 
 export function classifySaveFailure(error: unknown): SaveFailureClass {

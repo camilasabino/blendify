@@ -22,6 +22,7 @@ describe('SpotifyDestinationOutcome', () => {
       status: 'published',
       spotifyUrl: URL,
       savedToLibrary: true,
+      spotifyId: 'playlist-1',
       coverUploadFailed: true,
     })
 
@@ -34,7 +35,7 @@ describe('SpotifyDestinationOutcome', () => {
   })
 
   it('accepts a published destination without the newer optional fields', () => {
-    renderOutcome({ status: 'published', spotifyUrl: URL, savedToLibrary: false })
+    renderOutcome({ status: 'published', spotifyUrl: URL, savedToLibrary: false, spotifyId: 'playlist-1', coverUploadFailed: false })
 
     expect(screen.getByText('The playlist is now in your Spotify account.')).toBeVisible()
     expect(screen.queryByText('Couldn’t add the cover.')).toBeNull()
@@ -59,19 +60,8 @@ describe('SpotifyDestinationOutcome', () => {
     }
   })
 
-  it('falls back to the earlier copy when the reason is missing', () => {
-    const { unmount } = renderOutcome({ status: 'publish_incomplete', spotifyUrl: URL })
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'created the playlist on Spotify but couldn’t finish saving it',
-    )
-    unmount()
-
-    renderOutcome({ status: 'publish_incomplete', spotifyUrl: null })
-    expect(screen.getByRole('alert')).toHaveTextContent('couldn’t confirm whether the playlist was created')
-  })
-
   it('refuses an unsafe link', () => {
-    renderOutcome({ status: 'published', spotifyUrl: 'javascript:alert(1)', savedToLibrary: false })
+    renderOutcome({ status: 'published', spotifyUrl: 'javascript:alert(1)', savedToLibrary: false, spotifyId: 'playlist-1', coverUploadFailed: false })
 
     expect(screen.queryByRole('link')).toBeNull()
   })

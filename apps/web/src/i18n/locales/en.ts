@@ -713,10 +713,6 @@ export const en = {
   'ai.destination.savedHintLibrary':
     'The playlist is now in your Spotify account and your Library.',
   'ai.destination.incompleteTitle': 'Couldn’t finish saving to Spotify',
-  'ai.destination.incomplete':
-    'Blendify created the playlist on Spotify but couldn’t finish saving it. Open it in Spotify to check which songs were added.',
-  'ai.destination.uncertain':
-    'Blendify couldn’t confirm whether the playlist was created on Spotify. Check your Spotify account before creating it again.',
   'ai.destination.failed': 'Couldn’t save the playlist to Spotify. Try again.',
   'ai.destination.reconnect':
     'Spotify needs you to connect again before saving this playlist. The preview stays here.',
@@ -1016,8 +1012,6 @@ export const en = {
     'The playlist is on Spotify with all its songs, but Blendify couldn’t add it to your Library.',
   'spotifySave.reason.interrupted':
     'Saving was interrupted before Blendify could confirm it. The playlist may exist in your Spotify account, so check there before generating again.',
-  'errors.clientOutdated':
-    'This version of Blendify is out of date. Reload the page to continue.',
   'runStatus.preview.mix':
     'Your Mix preview is ready · not saved',
   'runStatus.preview.discover':

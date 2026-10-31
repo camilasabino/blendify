@@ -7,7 +7,7 @@ import type {
 import type { SpotifyDestination } from '@/domain/publication/spotify-destination';
 import { SPOTIFY_PREVIEW_TTL_MS } from './spotify-preview.policy';
 
-export const SPOTIFY_PREVIEW_RECORD_VERSION = 1;
+export const SPOTIFY_PREVIEW_RECORD_VERSION = 2;
 
 const PREVIEW_ID_BYTES = 16;
 

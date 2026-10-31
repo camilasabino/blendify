@@ -49,7 +49,7 @@ describe('coverage-first-bounded policy selection', () => {
     );
   });
 
-  it('direct Artist Mix stays on the legacy policy', async () => {
+  it('direct Artist Mix stays on the default policy', async () => {
     const world = createWorld({
       artistCharts: { Sade: titles('Sade', 8) },
     });
@@ -89,7 +89,7 @@ describe('coverage-first-bounded policy selection', () => {
     );
   });
 
-  it('AI artist_mix stays on the legacy path', async () => {
+  it('AI artist_mix stays on the default path', async () => {
     const { artistMix, playlists } = selectionHarness();
 
     await playlists.execute({
@@ -557,7 +557,7 @@ describe('coverage-first-bounded partial semantics', () => {
   });
 });
 
-describe('legacy Artist Mix regressions', () => {
+describe('default-policy Artist Mix regressions', () => {
   beforeEach(() => {
     jest.spyOn(Math, 'random').mockReturnValue(0.999);
   });

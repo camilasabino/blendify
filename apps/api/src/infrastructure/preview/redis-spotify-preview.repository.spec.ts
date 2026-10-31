@@ -66,7 +66,7 @@ describe('RedisSpotifyPreviewRepository', () => {
     const repository = memoryPreviewRepository();
     const created = preview();
     await repository.create(
-      { ...created, version: 2 } as unknown as SpotifyPreview,
+      { ...created, version: 1 } as unknown as SpotifyPreview,
       SPOTIFY_PREVIEW_TTL_MS,
     );
 

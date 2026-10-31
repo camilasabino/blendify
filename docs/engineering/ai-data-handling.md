@@ -217,12 +217,6 @@ cleared on Start over, logout and expiry). It is not a cookie, so there is no
 CSRF surface added, and Spotify-authenticated and Guest flows use the same
 mechanism.
 
-Migration: sessions are 30-minute Redis records and the key derivation is new,
-so records and tabs created before this change are simply not found (the web
-client discards a stored session without `accessKey`, and old path-token
-requests get the uniform 404). No record version bump or compatibility layer
-was needed.
-
 Residual: edge access logs record paths, so the session id is visible there
 but is harmless. They do not record request headers unless header capture is
 explicitly enabled at the provider (do not enable it for `X-Ai-Session-Key`).
