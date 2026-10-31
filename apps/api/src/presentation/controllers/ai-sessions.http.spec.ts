@@ -1701,6 +1701,8 @@ describe('Create with AI sessions over HTTP', () => {
         status: 'published',
         spotifyUrl: SPOTIFY_PLAYLIST.url,
         savedToLibrary: true,
+        spotifyId: SPOTIFY_PLAYLIST.id,
+        coverUploadFailed: false,
       });
       expect(world.musicProviders.forUser).toHaveBeenCalledWith('user-1');
       expect(world.spotify.createPlaylist).toHaveBeenCalledWith(
@@ -1730,8 +1732,54 @@ describe('Create with AI sessions over HTTP', () => {
       const restored = AiSessionStateSchema.parse(restoredBody);
       expect(restored.destination).toEqual(state.destination);
       expect(JSON.stringify(restoredBody)).not.toMatch(
-        /spotifyId|publishedAt|startedAt/,
+        /publishedAt|startedAt|attemptId/,
       );
+    });
+
+    it('reads a session persisted before the optional destination fields existed', async () => {
+      await restartWithGenerationLimit(5);
+      const owner = await sessionCookie('user-1');
+      const published = await generatedSession(owner);
+      const incomplete = await generatedSession(owner);
+      await publish(published, PUBLISH, owner).expect(200);
+      world.spotify.addTracksToPlaylist.mockRejectedValueOnce(
+        new Error('Spotify addTracksToPlaylist failed (500): boom'),
+      );
+      await publish(incomplete, PUBLISH, owner).expect(200);
+      const strip = (key: string, ...fields: string[]) => {
+        const record = world.stored.get(key)!;
+        const destination = { ...record.destination } as Record<
+          string,
+          unknown
+        >;
+        for (const field of fields) {
+          delete destination[field];
+        }
+        world.stored.set(key, {
+          ...record,
+          destination: destination as unknown as typeof record.destination,
+        });
+      };
+      strip(published, 'coverUploadFailed');
+      strip(incomplete, 'reason');
+
+      const publishedState = AiSessionStateSchema.parse(
+        (await readSession(published, owner).expect(200)).body,
+      );
+      const incompleteState = AiSessionStateSchema.parse(
+        (await readSession(incomplete, owner).expect(200)).body,
+      );
+
+      expect(publishedState.destination).toEqual({
+        status: 'published',
+        spotifyUrl: SPOTIFY_PLAYLIST.url,
+        savedToLibrary: true,
+        spotifyId: SPOTIFY_PLAYLIST.id,
+      });
+      expect(incompleteState.destination).toEqual({
+        status: 'publish_incomplete',
+        spotifyUrl: SPOTIFY_PLAYLIST.url,
+      });
     });
 
     it('keeps the playlist out of the Library when the user preference says so', async () => {
@@ -1748,6 +1796,8 @@ describe('Create with AI sessions over HTTP', () => {
         status: 'published',
         spotifyUrl: SPOTIFY_PLAYLIST.url,
         savedToLibrary: false,
+        spotifyId: SPOTIFY_PLAYLIST.id,
+        coverUploadFailed: false,
       });
       expect(world.playlists.save).not.toHaveBeenCalled();
       expect(world.usageStats.recordMix).toHaveBeenCalledTimes(1);
@@ -1769,6 +1819,8 @@ describe('Create with AI sessions over HTTP', () => {
         status: 'published',
         spotifyUrl: SPOTIFY_PLAYLIST.url,
         savedToLibrary: true,
+        spotifyId: SPOTIFY_PLAYLIST.id,
+        coverUploadFailed: false,
       });
       expect(world.spotify.uploadPlaylistCover).toHaveBeenCalledWith(
         SPOTIFY_PLAYLIST.id,
@@ -1870,6 +1922,7 @@ describe('Create with AI sessions over HTTP', () => {
         expect(AiSessionStateSchema.parse(response.body).destination).toEqual({
           status: 'publish_incomplete',
           spotifyUrl: SPOTIFY_PLAYLIST.url,
+          reason: 'tracks_incomplete',
         });
       }
       expect(JSON.stringify(partial.body)).not.toContain('boom');
@@ -1891,6 +1944,7 @@ describe('Create with AI sessions over HTTP', () => {
       expect(AiSessionStateSchema.parse(response.body).destination).toEqual({
         status: 'publish_incomplete',
         spotifyUrl: null,
+        reason: 'outcome_unknown',
       });
       expect(world.stored.get(sessionKey)?.destination).toMatchObject({
         status: 'publish_incomplete',
@@ -1913,6 +1967,7 @@ describe('Create with AI sessions over HTTP', () => {
         expect(AiSessionStateSchema.parse(response.body).destination).toEqual({
           status: 'publish_incomplete',
           spotifyUrl: null,
+          reason: 'outcome_unknown',
         });
       }
       expect(JSON.stringify(first.body)).not.toContain('Cannot read');
@@ -1923,7 +1978,7 @@ describe('Create with AI sessions over HTTP', () => {
       expect(world.spotify.createPlaylist).toHaveBeenCalledTimes(1);
     });
 
-    it('keeps the strict legacy destination shape when the cover upload or the Library save fails', async () => {
+    it('reports the cover failure and the Library failure through the destination contract', async () => {
       await restartWithGenerationLimit(5);
       const owner = await sessionCookie('user-1');
       const withCover = await generatedSession(owner);
@@ -1944,10 +1999,13 @@ describe('Create with AI sessions over HTTP', () => {
         status: 'published',
         spotifyUrl: SPOTIFY_PLAYLIST.url,
         savedToLibrary: true,
+        spotifyId: SPOTIFY_PLAYLIST.id,
+        coverUploadFailed: true,
       });
       expect(AiSessionStateSchema.parse(unsaved.body).destination).toEqual({
         status: 'publish_incomplete',
         spotifyUrl: SPOTIFY_PLAYLIST.url,
+        reason: 'library_not_saved',
       });
       expect(world.stored.get(withCover)?.destination).toMatchObject({
         coverUploadFailed: true,

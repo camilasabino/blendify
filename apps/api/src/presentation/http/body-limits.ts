@@ -28,16 +28,6 @@ export const ROUTE_BODY_LIMITS: RouteBodyLimit[] = [
   { method: 'POST', path: '/api/playlists/bulk', limit: BODY_LIMITS.bulk },
   {
     method: 'POST',
-    path: '/api/playlists/mix',
-    limit: BODY_LIMITS.spotifyGeneration,
-  },
-  {
-    method: 'POST',
-    path: '/api/playlists/discover',
-    limit: BODY_LIMITS.spotifyGeneration,
-  },
-  {
-    method: 'POST',
     path: '/api/generate/mix',
     limit: BODY_LIMITS.publicGeneration,
   },

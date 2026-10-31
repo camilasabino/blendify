@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BulkLibraryUseCase } from '@/application/use-cases/bulk-library.use-case';
 import { RemovePlaylistFromLibraryUseCase } from '@/application/use-cases/remove-playlist-from-library.use-case';
-import { CreateSpotifyPlaylistUseCase } from '@/application/use-cases/create-spotify-playlist.use-case';
 import { GetPlaylistDetailUseCase } from '@/application/use-cases/get-playlist-detail.use-case';
 import { ListLibraryPlaylistsUseCase } from '@/application/use-cases/list-library-playlists.use-case';
 import { SyncLibraryUseCase } from '@/application/use-cases/sync-library.use-case';
@@ -20,7 +19,6 @@ import { PublicationModule } from './publication.module';
   imports: [GenerationModule, PublicationModule],
   controllers: [PlaylistsController, PreviewsController],
   providers: [
-    CreateSpotifyPlaylistUseCase,
     CreateSpotifyPreviewUseCase,
     GetSpotifyPreviewUseCase,
     SaveSpotifyPreviewUseCase,

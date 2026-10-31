@@ -19,7 +19,6 @@ export function phaseMessageKey(phase: GenerationProgress['phase']): MessageKey 
     case 'resolving_seeds':
       return 'create.progressResolving'
     case 'matching_tracks':
-    case 'publishing':
       return 'create.progressMatching'
   }
 }

@@ -13,7 +13,6 @@ describe('GenerationProgressTracker', () => {
 
     tracker.report('resolving_seeds', 1, 2);
     tracker.report('matching_tracks', 4, 10);
-    tracker.report('publishing', 3, 3);
 
     expect(updates[0]).toMatchObject({
       phase: 'resolving_seeds',
@@ -27,12 +26,7 @@ describe('GenerationProgressTracker', () => {
       total: 10,
       percent: 42,
     });
-    expect(updates[2]).toMatchObject({
-      phase: 'publishing',
-      current: 3,
-      total: 3,
-      percent: 100,
-    });
+    expect(updates).toHaveLength(2);
   });
 
   it('does not estimate eta from time between matching reports', () => {
@@ -84,7 +78,7 @@ describe('GenerationProgressTracker', () => {
 
   it('is a no-op without a reporter', () => {
     expect(() =>
-      new GenerationProgressTracker().report('publishing', 1, 2),
+      new GenerationProgressTracker().report('matching_tracks', 1, 2),
     ).not.toThrow();
   });
 

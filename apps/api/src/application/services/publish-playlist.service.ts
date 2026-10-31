@@ -1,8 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type {
+  PlaylistDetail,
   PlaylistPublishStep,
   PlaylistTracksAddedState,
-  PublishedPlaylist,
 } from '@blendify/contracts';
 import { PlaylistPublishIncompleteError } from '@/domain/errors/playlist-publish-incomplete.error';
 import { isConfirmedRejection } from '@/domain/publication/spotify-destination';
@@ -16,8 +16,10 @@ import type {
 } from '@/domain/repositories/music-provider.port';
 import { Playlist } from '@/domain/playlist/playlist.entity';
 import { toPlaylistDetail } from '@/application/dto/playlist-response.dto';
-import type { ProgressReporter } from './generation-progress.tracker';
-import { GenerationProgressTracker } from './generation-progress.tracker';
+
+export type PublishedPlaylist = PlaylistDetail & {
+  coverUploadFailed?: boolean;
+};
 
 @Injectable()
 export class PublishPlaylistService {
@@ -34,15 +36,9 @@ export class PublishPlaylistService {
     spotifyUserId: string;
     coverImageBase64?: string;
     persistToLibrary: boolean;
-    onProgress?: ProgressReporter;
     onRemotePlaylistCreated?: (remote: ProviderPlaylist) => Promise<void>;
   }): Promise<PublishedPlaylist> {
     const { playlist, provider } = input;
-    const tracker = new GenerationProgressTracker(input.onProgress);
-    const steps = input.coverImageBase64 ? 4 : 3;
-    let step = 0;
-
-    tracker.report('publishing', step, steps);
     const remote = await provider.createPlaylist({
       userId: input.spotifyUserId,
       name: playlist.name.getValue(),
@@ -50,8 +46,6 @@ export class PublishPlaylistService {
       isPublic: false,
     });
     await input.onRemotePlaylistCreated?.(remote);
-    step += 1;
-    tracker.report('publishing', step, steps);
 
     await this.completeStep(remote, 'add_tracks', () =>
       provider.addTracksToPlaylist(
@@ -59,8 +53,6 @@ export class PublishPlaylistService {
         playlist.tracks.map((track) => track.uri),
       ),
     );
-    step += 1;
-    tracker.report('publishing', step, steps);
 
     let coverUploadFailed = false;
     if (input.coverImageBase64) {
@@ -72,8 +64,6 @@ export class PublishPlaylistService {
           `Playlist cover upload failed: ${errorMessage(error)}`,
         );
       }
-      step += 1;
-      tracker.report('publishing', step, steps);
     }
 
     playlist.linkToSpotify(remote.id, remote.url);
@@ -90,7 +80,6 @@ export class PublishPlaylistService {
           this.playlists.save(playlist),
         )
       : playlist;
-    tracker.report('publishing', steps, steps);
     return {
       ...toPlaylistDetail(result),
       ...(coverUploadFailed ? { coverUploadFailed } : {}),

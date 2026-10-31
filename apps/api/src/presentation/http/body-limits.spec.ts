@@ -23,12 +23,12 @@ function jsonOfSize(bytes: number): string {
 describe('bodyLimitFor', () => {
   it('uses the small default for unlisted routes', () => {
     expect(bodyLimitFor('POST', '/api/artists/resolve')).toBe('16kb');
-    expect(bodyLimitFor('GET', '/api/playlists/mix')).toBe('16kb');
+    expect(bodyLimitFor('GET', '/api/previews/mix')).toBe('16kb');
   });
 
   it('matches listed routes regardless of case and trailing slash', () => {
-    expect(bodyLimitFor('post', '/API/Playlists/Mix/')).toBe('512kb');
-    expect(bodyLimitFor('POST', '/api/playlists/discover')).toBe('512kb');
+    expect(bodyLimitFor('post', '/API/Previews/Mix/')).toBe('32kb');
+    expect(bodyLimitFor('POST', '/api/previews/abc123/save')).toBe('512kb');
     expect(bodyLimitFor('POST', '/api/playlists/bulk')).toBe('64kb');
     expect(bodyLimitFor('POST', '/api/generate/mix')).toBe('32kb');
     expect(bodyLimitFor('POST', '/api/generate/discover/')).toBe('32kb');
@@ -67,14 +67,14 @@ describe('bodyLimitFor', () => {
       publicGeneration: '32kb',
       transfer: '64kb',
     });
-    expect(ROUTE_BODY_LIMITS).toHaveLength(10);
+    expect(ROUTE_BODY_LIMITS).toHaveLength(8);
   });
 });
 
 describe('createBodyParser', () => {
   it('accepts bodies within the route limit', async () => {
     await request(app())
-      .post('/api/playlists/mix')
+      .post('/api/previews/abc123/save')
       .set('Content-Type', 'application/json')
       .send(jsonOfSize(450_000))
       .expect(200);
@@ -95,7 +95,7 @@ describe('createBodyParser', () => {
 
   it('rejects cover payloads above the Spotify generation limit', async () => {
     await request(app())
-      .post('/api/playlists/mix')
+      .post('/api/previews/abc123/save')
       .set('Content-Type', 'application/json')
       .send(jsonOfSize(530_000))
       .expect(413);
@@ -131,10 +131,10 @@ describe('createBodyParser', () => {
       .send(jsonOfSize(33_000))
       .expect(413);
     await request(app())
-      .post('/api/playlists/discover')
+      .post('/api/previews/discover')
       .set('Content-Type', 'application/json')
       .send(jsonOfSize(33_000))
-      .expect(200);
+      .expect(413);
   });
 
   it('applies the default limit to urlencoded bodies', async () => {

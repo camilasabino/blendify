@@ -7,15 +7,11 @@ import {
   Patch,
   Post,
   Query,
-  Req,
-  Res,
   UseGuards,
 } from '@nestjs/common';
 import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   BulkLibraryRequestSchema,
-  CreateDiscoverRequestSchema,
-  CreateMixRequestSchema,
   DeletePlaylistQuerySchema,
   PlaylistLibraryQuerySchema,
   RenamePlaylistRequestSchema,
@@ -23,12 +19,7 @@ import {
   type PlaylistLibraryQuery,
 } from '@blendify/contracts';
 import type { z } from 'zod';
-import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '@/infrastructure/auth/jwt-auth.guard';
-import {
-  CreateSpotifyPlaylistUseCase,
-  type SpotifyPlaylistRequest,
-} from '@/application/use-cases/create-spotify-playlist.use-case';
 import { ListLibraryPlaylistsUseCase } from '@/application/use-cases/list-library-playlists.use-case';
 import { SyncLibraryUseCase } from '@/application/use-cases/sync-library.use-case';
 import { GetPlaylistDetailUseCase } from '@/application/use-cases/get-playlist-detail.use-case';
@@ -38,16 +29,7 @@ import { BulkLibraryUseCase } from '@/application/use-cases/bulk-library.use-cas
 import { CurrentUser } from '@/presentation/decorators/current-user.decorator';
 import { ZodValidationPipe } from '@/presentation/pipes/zod-validation.pipe';
 import { User } from '@/domain/user/user.entity';
-import {
-  acceptsNdjson,
-  writeNdjsonGeneration,
-} from '@/presentation/http/ndjson-generation';
-import type { ProgressReporter } from '@/application/services/generation-progress.tracker';
-import { RateLimit } from '@/presentation/request-limits/rate-limit.guard';
-import { LimitGenerationConcurrency } from '@/presentation/request-limits/generation-concurrency.interceptor';
 
-type MixRequest = z.output<typeof CreateMixRequestSchema>;
-type DiscoverRequest = z.output<typeof CreateDiscoverRequestSchema>;
 type RenameRequest = z.output<typeof RenamePlaylistRequestSchema>;
 type BulkRequest = z.output<typeof BulkLibraryRequestSchema>;
 
@@ -57,7 +39,6 @@ type BulkRequest = z.output<typeof BulkLibraryRequestSchema>;
 @Controller('api/playlists')
 export class PlaylistsController {
   constructor(
-    private readonly createPlaylist: CreateSpotifyPlaylistUseCase,
     private readonly library: ListLibraryPlaylistsUseCase,
     private readonly sync: SyncLibraryUseCase,
     private readonly detail: GetPlaylistDetailUseCase,
@@ -65,43 +46,6 @@ export class PlaylistsController {
     private readonly remove: RemovePlaylistFromLibraryUseCase,
     private readonly bulk: BulkLibraryUseCase,
   ) {}
-
-  @Post('mix')
-  @RateLimit('generation')
-  @LimitGenerationConcurrency()
-  @ApiOperation({ summary: 'Generate a Spotify playlist mix' })
-  async createMix(
-    @CurrentUser() user: User,
-    @Body(new ZodValidationPipe(CreateMixRequestSchema)) body: MixRequest,
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    if (!acceptsNdjson(req)) {
-      return this.create(user.id, body);
-    }
-    await writeNdjsonGeneration(res, (onProgress) =>
-      this.create(user.id, body, onProgress),
-    );
-  }
-
-  @Post('discover')
-  @RateLimit('generation')
-  @LimitGenerationConcurrency()
-  @ApiOperation({ summary: 'Generate a Spotify discovery playlist' })
-  async createDiscover(
-    @CurrentUser() user: User,
-    @Body(new ZodValidationPipe(CreateDiscoverRequestSchema))
-    body: DiscoverRequest,
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    if (!acceptsNdjson(req)) {
-      return this.create(user.id, body);
-    }
-    await writeNdjsonGeneration(res, (onProgress) =>
-      this.create(user.id, body, onProgress),
-    );
-  }
 
   @Get()
   @ApiOperation({ summary: 'List saved Blendify playlists' })
@@ -168,16 +112,5 @@ export class PlaylistsController {
       fromSpotify: query.fromSpotify,
     });
     return { ok: true as const };
-  }
-
-  private create(
-    userId: string,
-    request: SpotifyPlaylistRequest,
-    onProgress?: ProgressReporter,
-  ) {
-    return this.createPlaylist.execute(
-      { userId, request },
-      onProgress ? { onProgress } : undefined,
-    );
   }
 }

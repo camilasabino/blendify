@@ -4,15 +4,10 @@ import {
 } from '@blendify/contracts';
 import { z } from 'zod';
 
-const publicationFields = {
-  coverImageBase64: true,
-  persistToLibrary: true,
-} as const;
-
 export const GenerateDiscoverPlaylistSchema = z
   .discriminatedUnion('kind', [
-    DiscoverArtistRequestSchema.omit(publicationFields),
-    DiscoverTrackRequestSchema.omit(publicationFields),
+    DiscoverArtistRequestSchema,
+    DiscoverTrackRequestSchema,
   ])
   .and(
     z.object({

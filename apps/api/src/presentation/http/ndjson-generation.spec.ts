@@ -63,28 +63,25 @@ describe('writeNdjsonGeneration progress monotonicity', () => {
     ]);
   });
 
-  it('keeps a later phase that advances the percent, including a partial search', async () => {
+  it('keeps later progress that advances the percent, including a partial search', async () => {
     const { res, lines } = captureResponse();
 
     await writeNdjsonGeneration(res, (onProgress) => {
       onProgress(progress('matching_tracks', 58, 6, 10));
       onProgress(progress('matching_tracks', 42, 4, 10));
-      onProgress(progress('publishing', 90, 0, 3));
-      onProgress(progress('publishing', 100, 3, 3));
-      return Promise.resolve({ id: 'published' });
+      onProgress(progress('matching_tracks', 74, 8, 10));
+      return Promise.resolve({ id: 'generated' });
     });
 
     expect(events(lines).map((event) => event.percent ?? event.type)).toEqual([
       58,
-      90,
-      100,
+      74,
       'result',
     ]);
     expect(events(lines)[1]).toMatchObject({
-      phase: 'publishing',
-      current: 0,
-      total: 3,
-      percent: 90,
+      phase: 'matching_tracks',
+      current: 8,
+      total: 10,
     });
     expect(events(lines).some((event) => event.current === 10)).toBe(false);
   });

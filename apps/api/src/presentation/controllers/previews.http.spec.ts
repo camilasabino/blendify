@@ -19,17 +19,10 @@ import {
 } from '@blendify/contracts';
 import { PublishPlaylistService } from '@/application/services/publish-playlist.service';
 import { SpotifyPublicationRunner } from '@/application/services/spotify-publication.runner';
-import { BulkLibraryUseCase } from '@/application/use-cases/bulk-library.use-case';
-import { CreateSpotifyPlaylistUseCase } from '@/application/use-cases/create-spotify-playlist.use-case';
 import { CreateSpotifyPreviewUseCase } from '@/application/use-cases/create-spotify-preview.use-case';
 import { GeneratePlaylistUseCase } from '@/application/use-cases/generate-playlist.use-case';
-import { GetPlaylistDetailUseCase } from '@/application/use-cases/get-playlist-detail.use-case';
 import { GetSpotifyPreviewUseCase } from '@/application/use-cases/get-spotify-preview.use-case';
-import { ListLibraryPlaylistsUseCase } from '@/application/use-cases/list-library-playlists.use-case';
-import { RemovePlaylistFromLibraryUseCase } from '@/application/use-cases/remove-playlist-from-library.use-case';
-import { RenamePlaylistUseCase } from '@/application/use-cases/rename-playlist.use-case';
 import { SaveSpotifyPreviewUseCase } from '@/application/use-cases/save-spotify-preview.use-case';
-import { SyncLibraryUseCase } from '@/application/use-cases/sync-library.use-case';
 import {
   createWorld as createGenerationWorld,
   titles,
@@ -48,10 +41,14 @@ import { JwtAuthGuard } from '@/infrastructure/auth/jwt-auth.guard';
 import { GlobalExceptionFilter } from '@/presentation/filters/global-exception.filter';
 import { OriginCsrfGuard } from '@/presentation/guards/origin-csrf.guard';
 import { createBodyParser } from '@/presentation/http/body-limits';
+import {
+  LEGACY_PUBLISH_REJECTED_EVENT,
+  rejectLegacyPublishEndpoints,
+} from '@/presentation/http/legacy-publish-endpoints';
 import { listenOnLoopback } from '@/presentation/http/loopback.testing';
+import { requestCorrelation } from '@/presentation/http/request-correlation';
 import { DEFAULT_RATE_LIMITS } from '@/presentation/request-limits/request-limits.config';
 import { inMemoryRequestLimitProviders } from '@/presentation/request-limits/request-limits.testing';
-import { PlaylistsController } from './playlists.controller';
 import { PreviewsController } from './previews.controller';
 
 const ORIGIN = 'http://127.0.0.1:5173';
@@ -147,14 +144,12 @@ function createWorld(
 type World = ReturnType<typeof createWorld>;
 
 async function createApp(world: World): Promise<INestApplication> {
-  const unused = { execute: jest.fn() };
   const module = await Test.createTestingModule({
-    controllers: [PreviewsController, PlaylistsController],
+    controllers: [PreviewsController],
     providers: [
       CreateSpotifyPreviewUseCase,
       GetSpotifyPreviewUseCase,
       SaveSpotifyPreviewUseCase,
-      CreateSpotifyPlaylistUseCase,
       SpotifyPublicationRunner,
       PublishPlaylistService,
       {
@@ -173,12 +168,6 @@ async function createApp(world: World): Promise<INestApplication> {
       { provide: USER_REPOSITORY, useValue: world.users },
       { provide: USAGE_STATS_REPOSITORY, useValue: world.usageStats },
       { provide: PLAYLIST_REPOSITORY, useValue: world.playlists },
-      { provide: ListLibraryPlaylistsUseCase, useValue: unused },
-      { provide: SyncLibraryUseCase, useValue: unused },
-      { provide: GetPlaylistDetailUseCase, useValue: unused },
-      { provide: RenamePlaylistUseCase, useValue: unused },
-      { provide: RemovePlaylistFromLibraryUseCase, useValue: unused },
-      { provide: BulkLibraryUseCase, useValue: unused },
       {
         provide: ConfigService,
         useValue: {
@@ -203,6 +192,8 @@ async function createApp(world: World): Promise<INestApplication> {
     logger: false,
     bodyParser: false,
   });
+  app.use(requestCorrelation);
+  app.use(rejectLegacyPublishEndpoints);
   app.use(createBodyParser());
   app.useGlobalFilters(new GlobalExceptionFilter());
   await listenOnLoopback(app);
@@ -760,27 +751,119 @@ describe('Spotify previews over HTTP', () => {
     });
   });
 
-  describe('legacy endpoints', () => {
-    it('keep publishing on generate with their publication fields', async () => {
-      const res = await post('/api/playlists/mix')
-        .send({ ...MIX_BODY, persistToLibrary: true })
-        .expect(201);
+  describe('legacy publish endpoints', () => {
+    const LEGACY_PATHS = ['/api/playlists/mix', '/api/playlists/discover'];
 
-      expect(res.body).toMatchObject({
-        spotifyId: SPOTIFY.id,
-        spotifyUrl: SPOTIFY.url,
-      });
-      expect(world.provider.createPlaylist).toHaveBeenCalledTimes(1);
-      expect(world.playlists.save).toHaveBeenCalledTimes(1);
+    function generationCalls(): number {
+      return (
+        world.generation.catalog.resolveTrack.mock.calls.length +
+        world.generation.catalog.searchTracks.mock.calls.length +
+        world.generation.catalog.searchArtists.mock.calls.length +
+        world.generation.catalog.getArtistsByIds.mock.calls.length +
+        world.generation.discovery.getTopTracksForArtist.mock.calls.length +
+        world.generation.discovery.getSimilarArtists.mock.calls.length +
+        world.generation.discovery.getSimilarTracks.mock.calls.length
+      );
+    }
+
+    it.each(LEGACY_PATHS)(
+      'answers POST %s with 410 CLIENT_OUTDATED and a reload instruction',
+      async (path) => {
+        const res = await post(path).send(MIX_BODY).expect(410);
+
+        expect(res.body).toEqual({
+          statusCode: 410,
+          code: 'CLIENT_OUTDATED',
+          message: expect.stringMatching(/reload/i) as string,
+        });
+        expect(res.headers['x-request-id']).toBeDefined();
+      },
+    );
+
+    it.each(LEGACY_PATHS)(
+      'rejects POST %s without generating or calling any provider',
+      async (path) => {
+        await post(path).send(MIX_BODY).expect(410);
+        await post(path, null).send(MIX_BODY).expect(410);
+
+        expect(generationCalls()).toBe(0);
+        expect(spotifyWrites()).toBe(0);
+        expect(world.users.findById).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      ['an oversized body', () => ({ data: 'x'.repeat(600_000) })],
+      ['an invalid publication body', () => ({ kind: 'artist_mix' })],
+    ])('accepts %s without parsing it', async (_label, body) => {
+      await post('/api/playlists/mix').send(body()).expect(410);
     });
 
-    it('do not interfere with previews', async () => {
-      await post('/api/playlists/mix').send(MIX_BODY).expect(201);
-      const calls = world.provider.createPlaylist.mock.calls.length;
+    it('accepts malformed JSON and without authentication or origin', async () => {
+      await request(server())
+        .post('/api/playlists/discover/')
+        .set('Content-Type', 'application/json')
+        .send('{not json')
+        .expect(410);
+    });
 
-      await generate();
+    it('leaves other methods and sibling routes alone', async () => {
+      await get('/api/playlists/mix').expect(404);
+      await post('/api/playlists/mix/extra').expect(404);
+    });
 
-      expect(world.provider.createPlaylist).toHaveBeenCalledTimes(calls);
+    it('consumes neither the publish nor the generation quota', async () => {
+      for (let i = 0; i < 15; i += 1) {
+        await post(LEGACY_PATHS[i % 2])
+          .send(MIX_BODY)
+          .expect(410);
+      }
+
+      const previews: SpotifyPreviewDto[] = [];
+      for (let i = 0; i < 13; i += 1) {
+        previews.push(await generate());
+      }
+      for (const preview of previews.slice(0, 12)) {
+        await save(preview.previewId).expect(200);
+      }
+      await save(previews[12].previewId).expect(429);
+    });
+
+    it('logs the rejection without identifiers or request content', async () => {
+      const warn = jest.spyOn(Logger.prototype, 'warn');
+
+      await post('/api/playlists/mix', 'user-1')
+        .send({ ...MIX_BODY, name: 'Private playlist title' })
+        .expect(410);
+
+      const events = warn.mock.calls
+        .map(([message]) => JSON.parse(String(message)) as object)
+        .filter(
+          (entry) =>
+            (entry as { event?: string }).event ===
+            LEGACY_PUBLISH_REJECTED_EVENT,
+        );
+      expect(events).toEqual([
+        {
+          event: LEGACY_PUBLISH_REJECTED_EVENT,
+          requestId: expect.any(String) as string,
+          endpoint: 'mix',
+        },
+      ]);
+      expect(JSON.stringify(warn.mock.calls)).not.toMatch(
+        /user-1|Private playlist|sade/i,
+      );
+      warn.mockRestore();
+    });
+
+    it('keeps current preview generation and save working', async () => {
+      await post('/api/playlists/mix').send(MIX_BODY).expect(410);
+
+      const preview = await generate();
+      const saved = await save(preview.previewId).expect(200);
+
+      expect(bodyOf(saved).destination?.status).toBe('published');
+      expect(world.provider.createPlaylist).toHaveBeenCalledTimes(1);
     });
   });
 });

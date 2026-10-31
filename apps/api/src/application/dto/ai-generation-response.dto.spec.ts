@@ -35,8 +35,21 @@ function publicDestination(destination: AiSessionDestination) {
   return AiSessionStateSchema.parse(response).destination;
 }
 
+type StoredDestination = Parameters<typeof session>[0];
+
+function withoutFields(
+  destination: StoredDestination,
+  ...fields: string[]
+): StoredDestination {
+  const copy: Record<string, unknown> = { ...destination };
+  for (const field of fields) {
+    delete copy[field];
+  }
+  return copy as unknown as StoredDestination;
+}
+
 describe('AI session destination response', () => {
-  it('keeps the legacy published shape when the cover upload failed', () => {
+  it('exposes the Spotify id and the cover failure on a published destination', () => {
     expect(
       publicDestination({
         status: 'published',
@@ -49,7 +62,50 @@ describe('AI session destination response', () => {
       status: 'published',
       spotifyUrl: LINK.spotifyUrl,
       savedToLibrary: true,
+      spotifyId: LINK.spotifyId,
+      coverUploadFailed: true,
     });
+  });
+
+  it('reports a published destination without a cover failure as such', () => {
+    expect(
+      publicDestination({
+        status: 'published',
+        publishedAt: NOW.toISOString(),
+        spotifyPlaylist: LINK,
+        savedToLibrary: false,
+        coverUploadFailed: false,
+      }),
+    ).toEqual({
+      status: 'published',
+      spotifyUrl: LINK.spotifyUrl,
+      savedToLibrary: false,
+      spotifyId: LINK.spotifyId,
+      coverUploadFailed: false,
+    });
+  });
+
+  it('omits the fields a session persisted before they existed does not carry', () => {
+    const stored = withoutFields(
+      {
+        status: 'published',
+        publishedAt: NOW.toISOString(),
+        spotifyPlaylist: { spotifyId: '', spotifyUrl: LINK.spotifyUrl },
+        savedToLibrary: true,
+        coverUploadFailed: false,
+      },
+      'coverUploadFailed',
+    );
+
+    const destination = publicDestination(stored);
+
+    expect(destination).toEqual({
+      status: 'published',
+      spotifyUrl: LINK.spotifyUrl,
+      savedToLibrary: true,
+    });
+    expect(destination).not.toHaveProperty('spotifyId');
+    expect(destination).not.toHaveProperty('coverUploadFailed');
   });
 
   it.each([
@@ -58,7 +114,7 @@ describe('AI session destination response', () => {
     ['library_not_saved', LINK],
     ['interrupted', LINK],
   ] as const)(
-    'keeps the legacy incomplete shape for reason %s without exposing it',
+    'exposes the reason %s of an incomplete destination',
     (reason, spotifyPlaylist) => {
       expect(
         publicDestination({
@@ -70,11 +126,32 @@ describe('AI session destination response', () => {
       ).toEqual({
         status: 'publish_incomplete',
         spotifyUrl: spotifyPlaylist?.spotifyUrl ?? null,
+        reason,
       });
     },
   );
 
-  it('keeps the legacy publishing shape without the attempt id', () => {
+  it('omits the reason of an incomplete destination persisted without one', () => {
+    const destination = publicDestination(
+      withoutFields(
+        {
+          status: 'publish_incomplete',
+          failedAt: NOW.toISOString(),
+          spotifyPlaylist: LINK,
+          reason: 'interrupted',
+        },
+        'reason',
+      ),
+    );
+
+    expect(destination).toEqual({
+      status: 'publish_incomplete',
+      spotifyUrl: LINK.spotifyUrl,
+    });
+    expect(destination).not.toHaveProperty('reason');
+  });
+
+  it('keeps the publishing shape without the attempt id or the playlist link', () => {
     expect(
       publicDestination({
         status: 'publishing',

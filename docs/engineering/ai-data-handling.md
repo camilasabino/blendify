@@ -115,7 +115,8 @@ an optional typed `errorCode`.
 service error code), `durationMs`, `requestId`.
 
 Rate limits: `request_limit.rejected` with `bucket` (`interpret` covers
-interpretation and refinement; `generation` covers generation and publish;
+interpretation and refinement; `generation` covers generation and `publish`
+covers new publication attempts;
 `resolve` covers clarification, Apply and Dismiss; `transfer`;
 `generation-concurrency`), `reason`, `retryAfterSeconds`, `identityKind`,
 keyed `identityHash`, `requestId`. The per-session refinement cap shows up as

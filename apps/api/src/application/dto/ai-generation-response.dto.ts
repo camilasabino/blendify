@@ -17,6 +17,7 @@ import {
 import { toAiTransferPlaylist } from '@/application/services/ai-transfer-playlist';
 import { fromTrackResponse } from './playlist-response.dto';
 import { toRefinement } from './ai-refinement-response.dto';
+import { toSpotifyDestinationResponse } from './spotify-preview-response.dto';
 import {
   toAiSessionResponse,
   toGeneratedPreview,
@@ -121,26 +122,13 @@ function toExecution(
 function toDestination(
   destination: AiSessionDestination,
 ): AiSessionDestinationDto {
-  switch (destination.status) {
-    case 'publishing':
-      return { status: 'publishing' };
-    case 'published':
-      return {
-        status: 'published',
-        spotifyUrl: destination.spotifyPlaylist.spotifyUrl,
-        savedToLibrary: destination.savedToLibrary,
-      };
-    case 'publish_incomplete':
-      return {
-        status: 'publish_incomplete',
-        spotifyUrl: destination.spotifyPlaylist?.spotifyUrl ?? null,
-      };
-    case 'transfer_prepared':
-      return {
-        status: 'transfer_prepared',
-        transfer: { ...destination.transfer },
-      };
+  if (destination.status === 'transfer_prepared') {
+    return {
+      status: 'transfer_prepared',
+      transfer: { ...destination.transfer },
+    };
   }
+  return toSpotifyDestinationResponse(destination);
 }
 
 function toGenerationOutcome(

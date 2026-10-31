@@ -325,8 +325,6 @@ export const PlaylistGenerationSchema = z.discriminatedUnion('kind', [
 const PlaylistMetadataSchema = z.object({
   name: z.string().max(PLAYLIST_NAME_MAX_LENGTH).default(''),
   description: z.string().max(300).default(''),
-  coverImageBase64: z.string().min(1).max(400_000).optional(),
-  persistToLibrary: z.boolean().default(true),
 });
 
 export const ArtistMixRequestSchema = PlaylistMetadataSchema.extend({
@@ -348,11 +346,6 @@ export const GenreMixRequestSchema = PlaylistMetadataSchema.extend({
   orderMode: TrackOrderModeSchema.default('random'),
 }).strict();
 
-export const CreateMixRequestSchema = z.discriminatedUnion('kind', [
-  ArtistMixRequestSchema,
-  GenreMixRequestSchema,
-]);
-
 export const DiscoverArtistRequestSchema = PlaylistMetadataSchema.extend({
   kind: z.literal('discover_artist'),
   artistId: z.string().min(1),
@@ -373,24 +366,14 @@ export const DiscoverTrackRequestSchema = PlaylistMetadataSchema.extend({
   orderMode: TrackOrderModeSchema.default('random'),
 }).strict();
 
-export const CreateDiscoverRequestSchema = z.discriminatedUnion('kind', [
-  DiscoverArtistRequestSchema,
-  DiscoverTrackRequestSchema,
-]);
-
-const publicationOnlyFields = {
-  coverImageBase64: true,
-  persistToLibrary: true,
-} as const;
-
 export const GenerateMixRequestSchema = z.discriminatedUnion('kind', [
-  ArtistMixRequestSchema.omit(publicationOnlyFields),
-  GenreMixRequestSchema.omit(publicationOnlyFields),
+  ArtistMixRequestSchema,
+  GenreMixRequestSchema,
 ]);
 
 export const GenerateDiscoverRequestSchema = z.discriminatedUnion('kind', [
-  DiscoverArtistRequestSchema.omit(publicationOnlyFields),
-  DiscoverTrackRequestSchema.omit(publicationOnlyFields),
+  DiscoverArtistRequestSchema,
+  DiscoverTrackRequestSchema,
 ]);
 
 const PlaylistNameSchema = z.string().trim().min(1).max(PLAYLIST_NAME_MAX_LENGTH);
@@ -474,10 +457,6 @@ export const PlaylistSummarySchema = z.object({
 export const PlaylistDetailSchema = PlaylistSummarySchema.extend({
   tracks: z.array(TrackSchema),
   generation: PlaylistGenerationSchema,
-});
-
-export const PublishedPlaylistSchema = PlaylistDetailSchema.extend({
-  coverUploadFailed: z.boolean().optional(),
 });
 
 export const PlaylistTransferOfferSchema = z.object({
@@ -593,7 +572,6 @@ export const PlaylistPublishIncompleteDetailsSchema = z.object({
 export const GENERATION_PHASES = [
   'resolving_seeds',
   'matching_tracks',
-  'publishing',
 ] as const;
 export const GenerationPhaseSchema = z.enum(GENERATION_PHASES);
 
@@ -611,15 +589,6 @@ const GenerationProgressEventSchema = GenerationProgressSchema.extend({
 const GenerationErrorEventSchema = ApiErrorResponseSchema.extend({
   type: z.literal('error'),
 });
-
-export const GenerationStreamEventSchema = z.discriminatedUnion('type', [
-  GenerationProgressEventSchema,
-  z.object({
-    type: z.literal('result'),
-    playlist: PublishedPlaylistSchema,
-  }),
-  GenerationErrorEventSchema,
-]);
 
 export const GeneratedPlaylistStreamEventSchema = z.discriminatedUnion(
   'type',
@@ -699,8 +668,8 @@ export const SpotifyPreviewStateSchema = z.strictObject({
 
 export const SaveToSpotifyRequestSchema = z.strictObject({
   name: PlaylistNameSchema,
-  coverImageBase64: PlaylistMetadataSchema.shape.coverImageBase64,
-  persistToLibrary: PlaylistMetadataSchema.shape.persistToLibrary,
+  coverImageBase64: z.string().min(1).max(400_000).optional(),
+  persistToLibrary: z.boolean().default(true),
 });
 
 export const AI_PROMPT_MAX_LENGTH = 2_000;
@@ -1188,15 +1157,12 @@ export type ReleaseRange = z.infer<typeof ReleaseRangeSchema>;
 export type SelectionFilters = z.infer<typeof SelectionFiltersSchema>;
 export type SelectionFilterName = (typeof SELECTION_FILTER_NAMES)[number];
 export type PlaylistGeneration = z.infer<typeof PlaylistGenerationSchema>;
-export type CreateMixRequest = z.input<typeof CreateMixRequestSchema>;
-export type CreateDiscoverRequest = z.input<typeof CreateDiscoverRequestSchema>;
 export type GenerateMixRequest = z.input<typeof GenerateMixRequestSchema>;
 export type GenerateDiscoverRequest = z.input<
   typeof GenerateDiscoverRequestSchema
 >;
 export type PlaylistSummary = z.infer<typeof PlaylistSummarySchema>;
 export type PlaylistDetail = z.infer<typeof PlaylistDetailSchema>;
-export type PublishedPlaylist = z.infer<typeof PublishedPlaylistSchema>;
 export type GeneratedPlaylistDto = z.infer<typeof GeneratedPlaylistSchema>;
 export type PlaylistTransferOfferDto = z.infer<
   typeof PlaylistTransferOfferSchema
@@ -1228,9 +1194,6 @@ export type PlaylistPublishIncompleteDetails = z.infer<
 >;
 export type GenerationPhase = z.infer<typeof GenerationPhaseSchema>;
 export type GenerationProgress = z.infer<typeof GenerationProgressSchema>;
-export type GenerationStreamEvent = z.infer<
-  typeof GenerationStreamEventSchema
->;
 export type GeneratedPlaylistStreamEvent = z.infer<
   typeof GeneratedPlaylistStreamEventSchema
 >;

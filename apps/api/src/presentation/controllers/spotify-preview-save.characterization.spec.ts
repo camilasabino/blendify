@@ -3,23 +3,23 @@ import { Test } from '@nestjs/testing';
 import type { Server } from 'http';
 import request from 'supertest';
 import {
-  GenerationStreamEventSchema,
-  PlaylistDetailSchema,
-  type GenerationStreamEvent,
+  SpotifyPreviewSchema,
+  SpotifyPreviewStateSchema,
+  SpotifyPreviewStreamEventSchema,
+  type SpotifyPreviewDto,
+  type SpotifyPreviewStreamEvent,
 } from '@blendify/contracts';
 import { GenreTrackCatalogService } from '@/application/services/genre-track-catalog.service';
 import { PublishPlaylistService } from '@/application/services/publish-playlist.service';
-import { BulkLibraryUseCase } from '@/application/use-cases/bulk-library.use-case';
-import { CreateSpotifyPlaylistUseCase } from '@/application/use-cases/create-spotify-playlist.use-case';
+import { SpotifyPublicationRunner } from '@/application/services/spotify-publication.runner';
+import { CreateSpotifyPreviewUseCase } from '@/application/use-cases/create-spotify-preview.use-case';
 import { GenerateArtistMixUseCase } from '@/application/use-cases/generate-artist-mix.use-case';
 import { GenerateDiscoverPlaylistUseCase } from '@/application/use-cases/generate-discover-playlist.use-case';
 import { GenerateGenreMixUseCase } from '@/application/use-cases/generate-genre-mix.use-case';
 import { GeneratePlaylistUseCase } from '@/application/use-cases/generate-playlist.use-case';
-import { GetPlaylistDetailUseCase } from '@/application/use-cases/get-playlist-detail.use-case';
-import { ListLibraryPlaylistsUseCase } from '@/application/use-cases/list-library-playlists.use-case';
-import { SyncLibraryUseCase } from '@/application/use-cases/sync-library.use-case';
-import { RemovePlaylistFromLibraryUseCase } from '@/application/use-cases/remove-playlist-from-library.use-case';
-import { RenamePlaylistUseCase } from '@/application/use-cases/rename-playlist.use-case';
+import { GetSpotifyPreviewUseCase } from '@/application/use-cases/get-spotify-preview.use-case';
+import { SaveSpotifyPreviewUseCase } from '@/application/use-cases/save-spotify-preview.use-case';
+import { memoryPreviewRepository } from '@/application/use-cases/spotify-preview-world.testing';
 import { Artist } from '@/domain/artist/artist.entity';
 import { BusinessRuleError } from '@/domain/errors/business-rule.error';
 import { CatalogUnavailableError } from '@/domain/errors/catalog-unavailable.error';
@@ -38,6 +38,7 @@ import {
 } from '@/domain/repositories/catalog-provider.port';
 import { PLAYLIST_REPOSITORY } from '@/domain/repositories/playlist.repository.port';
 import { PROVIDER_QUOTA } from '@/domain/repositories/provider-quota.port';
+import { SPOTIFY_PREVIEW_REPOSITORY } from '@/domain/repositories/spotify-preview.repository.port';
 import { USAGE_STATS_REPOSITORY } from '@/domain/repositories/usage-stats.repository.port';
 import { USER_REPOSITORY } from '@/domain/repositories/user.repository.port';
 import { Track } from '@/domain/track/track.entity';
@@ -46,9 +47,9 @@ import { ArtistId } from '@/domain/value-objects/artist-id.vo';
 import { TrackId } from '@/domain/value-objects/track-id.vo';
 import { JwtAuthGuard } from '@/infrastructure/auth/jwt-auth.guard';
 import { GlobalExceptionFilter } from '@/presentation/filters/global-exception.filter';
-import { PlaylistsController } from './playlists.controller';
 import { inMemoryRequestLimitProviders } from '@/presentation/request-limits/request-limits.testing';
 import { listenOnLoopback } from '@/presentation/http/loopback.testing';
+import { PreviewsController } from './previews.controller';
 
 const SPOTIFY_PLAYLIST = {
   id: 'spotify-playlist-1',
@@ -205,17 +206,23 @@ function createWorld() {
 type World = ReturnType<typeof createWorld> & { userId: string };
 
 async function createApp(world: World): Promise<INestApplication> {
-  const unused = { execute: jest.fn() };
   const module = await Test.createTestingModule({
-    controllers: [PlaylistsController],
+    controllers: [PreviewsController],
     providers: [
       GenerateArtistMixUseCase,
       GenerateGenreMixUseCase,
       GenerateDiscoverPlaylistUseCase,
       GeneratePlaylistUseCase,
-      CreateSpotifyPlaylistUseCase,
+      CreateSpotifyPreviewUseCase,
+      GetSpotifyPreviewUseCase,
+      SaveSpotifyPreviewUseCase,
+      SpotifyPublicationRunner,
       PublishPlaylistService,
       GenreTrackCatalogService,
+      {
+        provide: SPOTIFY_PREVIEW_REPOSITORY,
+        useValue: memoryPreviewRepository(),
+      },
       {
         provide: CATALOG_PROVIDER_FACTORY,
         useValue: { forMarket: () => world.provider },
@@ -229,12 +236,6 @@ async function createApp(world: World): Promise<INestApplication> {
       { provide: USER_REPOSITORY, useValue: world.users },
       { provide: USAGE_STATS_REPOSITORY, useValue: world.usageStats },
       { provide: PLAYLIST_REPOSITORY, useValue: world.playlists },
-      { provide: ListLibraryPlaylistsUseCase, useValue: unused },
-      { provide: SyncLibraryUseCase, useValue: unused },
-      { provide: GetPlaylistDetailUseCase, useValue: unused },
-      { provide: RenamePlaylistUseCase, useValue: unused },
-      { provide: RemovePlaylistFromLibraryUseCase, useValue: unused },
-      { provide: BulkLibraryUseCase, useValue: unused },
       ...inMemoryRequestLimitProviders(),
     ],
   })
@@ -274,24 +275,24 @@ function readNdjson(
   stream.on('end', () => callback(null, data));
 }
 
-function parseEvents(body: string): GenerationStreamEvent[] {
+function parseEvents(body: string): SpotifyPreviewStreamEvent[] {
   return body
     .split('\n')
     .filter(Boolean)
-    .map((line) => GenerationStreamEventSchema.parse(JSON.parse(line)));
+    .map((line) => SpotifyPreviewStreamEventSchema.parse(JSON.parse(line)));
 }
 
-function progressEvents(events: GenerationStreamEvent[]) {
+function progressEvents(events: SpotifyPreviewStreamEvent[]) {
   return events.flatMap((event) => (event.type === 'progress' ? [event] : []));
 }
 
-function distinctPhases(events: GenerationStreamEvent[]): string[] {
+function distinctPhases(events: SpotifyPreviewStreamEvent[]): string[] {
   return progressEvents(events)
     .map((event) => event.phase)
     .filter((phase, index, all) => phase !== all[index - 1]);
 }
 
-describe('Spotify Mode generation characterization', () => {
+describe('Spotify Mode preview and save characterization', () => {
   let world: World;
   let app: INestApplication;
 
@@ -308,8 +309,39 @@ describe('Spotify Mode generation characterization', () => {
     return app.getHttpServer() as Server;
   }
 
+  function previewRequest(path: 'mix' | 'discover', body: object) {
+    return request(httpServer()).post(`/api/previews/${path}`).send(body);
+  }
+
+  async function preview(
+    path: 'mix' | 'discover',
+    body: object,
+  ): Promise<SpotifyPreviewDto> {
+    const response = await previewRequest(path, body).expect(201);
+    return SpotifyPreviewSchema.parse(response.body);
+  }
+
+  function save(previewId: string, body: object = {}) {
+    return request(httpServer())
+      .post(`/api/previews/${previewId}/save`)
+      .send({ name: 'Late night', persistToLibrary: true, ...body });
+  }
+
+  async function saved(previewId: string, body: object = {}) {
+    const response = await save(previewId, body).expect(200);
+    return SpotifyPreviewStateSchema.parse(response.body);
+  }
+
   function publishedUris(): string[] {
     return world.provider.addTracksToPlaylist.mock.calls[0][1];
+  }
+
+  function expectNoSpotifyWrites() {
+    expect(world.provider.createPlaylist).not.toHaveBeenCalled();
+    expect(world.provider.addTracksToPlaylist).not.toHaveBeenCalled();
+    expect(world.provider.uploadPlaylistCover).not.toHaveBeenCalled();
+    expect(world.playlists.save).not.toHaveBeenCalled();
+    expect(world.usageStats.recordMix).not.toHaveBeenCalled();
   }
 
   const artistMixBody = {
@@ -328,23 +360,12 @@ describe('Spotify Mode generation characterization', () => {
   };
 
   describe('artist mix', () => {
-    it('generates, publishes to Spotify, saves to the library, and records stats', async () => {
-      const response = await request(httpServer())
-        .post('/api/playlists/mix')
-        .send(artistMixBody)
-        .expect(201);
+    it('previews without writing, then saves the previewed tracks and records stats', async () => {
+      const { playlist } = await preview('mix', artistMixBody);
 
-      const playlist = PlaylistDetailSchema.parse(response.body);
       expect(playlist).toMatchObject({
         name: 'Blendify · Mix · Sade + Massive Attack',
         description: 'Made with Blendify from Sade and Massive Attack.',
-        kind: 'artist_mix',
-        status: 'COMPLETED',
-        spotifyId: SPOTIFY_PLAYLIST.id,
-        spotifyUrl: SPOTIFY_PLAYLIST.url,
-        imageUrl: SPOTIFY_PLAYLIST.imageUrl,
-        trackCount: 6,
-        seedCount: 2,
         seeds: [
           {
             type: 'artist',
@@ -379,16 +400,31 @@ describe('Spotify Mode generation characterization', () => {
           ],
         },
       });
+      expect(playlist.tracks).toHaveLength(6);
       expect(
         playlist.tracks.filter((track) => track.artistId === 'sade'),
       ).toHaveLength(3);
       expect(
         playlist.tracks.filter((track) => track.artistId === 'massive-attack'),
       ).toHaveLength(3);
+      expectNoSpotifyWrites();
+    });
 
+    it('publishes the stored tracks with the saved name, records stats, and keeps the recipe', async () => {
+      const { previewId, playlist } = await preview('mix', artistMixBody);
+
+      const state = await saved(previewId);
+
+      expect(state.destination).toEqual({
+        status: 'published',
+        spotifyUrl: SPOTIFY_PLAYLIST.url,
+        savedToLibrary: true,
+        spotifyId: SPOTIFY_PLAYLIST.id,
+        coverUploadFailed: false,
+      });
       expect(world.provider.createPlaylist).toHaveBeenCalledWith({
         userId: 'spotify-user-1',
-        name: playlist.name,
+        name: 'Late night',
         description: playlist.description,
         isPublic: false,
       });
@@ -397,7 +433,8 @@ describe('Spotify Mode generation characterization', () => {
         playlist.tracks.map((track) => track.uri),
       );
       expect(world.provider.uploadPlaylistCover).not.toHaveBeenCalled();
-      expect(world.playlists.save).toHaveBeenCalledTimes(1);
+      const [libraryEntry] = world.playlists.save.mock.calls[0];
+      expect(libraryEntry.generation).toEqual(playlist.generation);
       expect(world.usageStats.recordMix).toHaveBeenCalledWith({
         userId: 'user-1',
         kind: 'artist',
@@ -418,26 +455,25 @@ describe('Spotify Mode generation characterization', () => {
       });
     });
 
-    it('honors custom metadata, uploads the cover, and skips the library when not persisting', async () => {
-      const response = await request(httpServer())
-        .post('/api/playlists/mix')
-        .send({
-          ...artistMixBody,
-          name: 'Late night',
-          description: 'Slow and warm',
-          orderMode: 'title',
-          coverImageBase64: 'jpeg-data',
-          persistToLibrary: false,
-        })
-        .expect(201);
-
-      const playlist = PlaylistDetailSchema.parse(response.body);
-      expect(playlist).toMatchObject({
-        name: 'Late night',
+    it('keeps the custom description and order mode, uploads the cover, and skips the Library when not persisting', async () => {
+      const { previewId, playlist } = await preview('mix', {
+        ...artistMixBody,
         description: 'Slow and warm',
-        status: 'COMPLETED',
-        spotifyId: SPOTIFY_PLAYLIST.id,
+        orderMode: 'title',
+      });
+      expect(playlist).toMatchObject({
+        description: 'Slow and warm',
         generation: { kind: 'artist_mix', orderMode: 'title' },
+      });
+
+      const state = await saved(previewId, {
+        coverImageBase64: 'jpeg-data',
+        persistToLibrary: false,
+      });
+
+      expect(state.destination).toMatchObject({
+        status: 'published',
+        savedToLibrary: false,
       });
       expect(world.provider.createPlaylist).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -453,64 +489,49 @@ describe('Spotify Mode generation characterization', () => {
       expect(world.usageStats.recordMix).toHaveBeenCalledTimes(1);
     });
 
-    it('streams ordered progress phases and ends with the published playlist', async () => {
-      const response = await request(httpServer())
-        .post('/api/playlists/mix')
+    it('streams ordered progress phases that stop at the preview', async () => {
+      const response = await previewRequest('mix', artistMixBody)
         .set('Accept', 'application/x-ndjson')
         .buffer(true)
         .parse(readNdjson)
-        .send(artistMixBody)
         .expect(200);
 
       const events = parseEvents(response.body as string);
       expect(distinctPhases(events)).toEqual([
         'resolving_seeds',
         'matching_tracks',
-        'publishing',
       ]);
-      const progress = progressEvents(events);
-      expect(progress.at(-1)).toMatchObject({
-        phase: 'publishing',
-        percent: 100,
-      });
       const last = events.at(-1);
       expect(last?.type).toBe('result');
       if (last?.type === 'result') {
-        expect(last.playlist).toMatchObject({
-          kind: 'artist_mix',
-          spotifyId: SPOTIFY_PLAYLIST.id,
-          trackCount: 6,
+        expect(last.playlist.playlist).toMatchObject({
+          generation: { kind: 'artist_mix' },
         });
+        expect(last.playlist.playlist.tracks).toHaveLength(6);
       }
+      expectNoSpotifyWrites();
     });
 
-    it('keeps the published playlist when stats recording fails', async () => {
+    it('keeps the published outcome when stats recording fails', async () => {
       world.usageStats.recordMix.mockRejectedValue(new Error('stats down'));
+      const { previewId } = await preview('mix', artistMixBody);
 
-      const response = await request(httpServer())
-        .post('/api/playlists/mix')
-        .send(artistMixBody)
-        .expect(201);
+      const state = await saved(previewId);
 
-      expect(response.body).toMatchObject({
-        status: 'COMPLETED',
+      expect(state.destination).toMatchObject({
+        status: 'published',
         spotifyId: SPOTIFY_PLAYLIST.id,
       });
       expect(world.playlists.save).toHaveBeenCalledTimes(1);
     });
 
-    it('fails without publishing when no tracks are found', async () => {
+    it('fails without a preview when no tracks are found', async () => {
       world.discovery.getTopTracksForArtist.mockResolvedValue([]);
 
-      const response = await request(httpServer())
-        .post('/api/playlists/mix')
-        .send(artistMixBody)
-        .expect(422);
+      const response = await previewRequest('mix', artistMixBody).expect(422);
 
       expect(response.body).toMatchObject({ code: 'NO_TRACKS_FOUND' });
-      expect(world.provider.createPlaylist).not.toHaveBeenCalled();
-      expect(world.playlists.save).not.toHaveBeenCalled();
-      expect(world.usageStats.recordMix).not.toHaveBeenCalled();
+      expectNoSpotifyWrites();
     });
 
     it('fails as unavailable, not as missing tracks, when the catalog cannot be reached', async () => {
@@ -518,16 +539,11 @@ describe('Spotify Mode generation characterization', () => {
         new CatalogUnavailableError(),
       );
 
-      const response = await request(httpServer())
-        .post('/api/playlists/mix')
-        .send(artistMixBody)
-        .expect(503);
+      const response = await previewRequest('mix', artistMixBody).expect(503);
 
       expect(response.body).toMatchObject({ code: 'CATALOG_UNAVAILABLE' });
       expect(world.provider.resolveTrack).toHaveBeenCalledTimes(1);
-      expect(world.provider.createPlaylist).not.toHaveBeenCalled();
-      expect(world.playlists.save).not.toHaveBeenCalled();
-      expect(world.usageStats.recordMix).not.toHaveBeenCalled();
+      expectNoSpotifyWrites();
     });
 
     it('fails without catalog or publication work when the quota is blocked', async () => {
@@ -538,51 +554,37 @@ describe('Spotify Mode generation characterization', () => {
         );
       });
 
-      const response = await request(httpServer())
-        .post('/api/playlists/mix')
-        .send(artistMixBody)
-        .expect(429);
+      const response = await previewRequest('mix', artistMixBody).expect(429);
 
       expect(response.body).toMatchObject({ code: 'SPOTIFY_RATE_LIMITED' });
       expect(world.provider.resolveTrack).not.toHaveBeenCalled();
-      expect(world.provider.createPlaylist).not.toHaveBeenCalled();
-      expect(world.usageStats.recordMix).not.toHaveBeenCalled();
+      expectNoSpotifyWrites();
     });
 
-    it('fails without publishing when the session user no longer exists', async () => {
+    it('fails a save without publishing when the session user no longer exists', async () => {
+      const { previewId } = await preview('mix', artistMixBody);
       world.userId = 'missing-user';
 
-      const response = await request(httpServer())
-        .post('/api/playlists/mix')
-        .send(artistMixBody)
-        .expect(422);
+      await save(previewId).expect(404);
 
-      expect(response.body).toMatchObject({ code: 'USER_NOT_FOUND' });
-      expect(world.provider.createPlaylist).not.toHaveBeenCalled();
-      expect(world.usageStats.recordMix).not.toHaveBeenCalled();
+      expectNoSpotifyWrites();
     });
   });
 
   describe('genre mix', () => {
-    it('generates from genre charts, publishes, and records genre stats', async () => {
-      const response = await request(httpServer())
-        .post('/api/playlists/mix')
-        .send({
-          kind: 'genre_mix',
-          genreIds: ['jazz'],
-          tracksPerSeed: 4,
-          popularity: 'balanced',
-        })
-        .expect(201);
+    const genreMixBody = {
+      kind: 'genre_mix',
+      genreIds: ['jazz'],
+      tracksPerSeed: 4,
+      popularity: 'balanced',
+    };
 
-      const playlist = PlaylistDetailSchema.parse(response.body);
+    it('previews from genre charts, then publishes and records genre stats on save', async () => {
+      const { previewId, playlist } = await preview('mix', genreMixBody);
+
       expect(playlist).toMatchObject({
         name: 'Blendify · Mix · Jazz',
         description: 'Made with Blendify from Jazz.',
-        kind: 'genre_mix',
-        status: 'COMPLETED',
-        spotifyId: SPOTIFY_PLAYLIST.id,
-        trackCount: 4,
         seeds: [{ type: 'genre', id: 'jazz', name: 'Jazz' }],
         generation: {
           version: 1,
@@ -593,6 +595,11 @@ describe('Spotify Mode generation characterization', () => {
           seeds: [{ id: 'jazz', name: 'Jazz' }],
         },
       });
+      expect(playlist.tracks).toHaveLength(4);
+      expectNoSpotifyWrites();
+
+      await saved(previewId);
+
       expect(world.provider.createPlaylist).toHaveBeenCalledWith(
         expect.objectContaining({
           userId: 'spotify-user-1',
@@ -641,18 +648,14 @@ describe('Spotify Mode generation characterization', () => {
     it('filters the genre by region and records the region in the recipe', async () => {
       mockArgentinianJazz();
 
-      const response = await request(httpServer())
-        .post('/api/playlists/mix')
-        .send({
-          kind: 'genre_mix',
-          genreIds: ['jazz'],
-          filters: { region: 'argentina' },
-          tracksPerSeed: 4,
-          popularity: 'balanced',
-        })
-        .expect(201);
+      const { playlist } = await preview('mix', {
+        kind: 'genre_mix',
+        genreIds: ['jazz'],
+        filters: { region: 'argentina' },
+        tracksPerSeed: 4,
+        popularity: 'balanced',
+      });
 
-      const playlist = PlaylistDetailSchema.parse(response.body);
       expect(playlist.name).toBe('Blendify · Mix · Jazz · Argentina');
       expect(playlist.generation).toMatchObject({
         kind: 'genre_mix',
@@ -671,49 +674,40 @@ describe('Spotify Mode generation characterization', () => {
     it('keeps an explicit playlist name without appending the region', async () => {
       mockArgentinianJazz();
 
-      const response = await request(httpServer())
-        .post('/api/playlists/mix')
-        .send({
-          kind: 'genre_mix',
-          name: 'Ruta 40',
-          genreIds: ['jazz'],
-          filters: { region: 'argentina' },
-          tracksPerSeed: 4,
-          popularity: 'balanced',
-        })
-        .expect(201);
+      const { playlist } = await preview('mix', {
+        kind: 'genre_mix',
+        name: 'Ruta 40',
+        genreIds: ['jazz'],
+        filters: { region: 'argentina' },
+        tracksPerSeed: 4,
+        popularity: 'balanced',
+      });
 
-      expect(PlaylistDetailSchema.parse(response.body).name).toBe('Ruta 40');
+      expect(playlist.name).toBe('Ruta 40');
     });
 
     it('rejects the former top-level region field instead of ignoring it', async () => {
-      await request(httpServer())
-        .post('/api/playlists/mix')
-        .send({
-          kind: 'genre_mix',
-          genreIds: ['jazz'],
-          region: 'argentina',
-          tracksPerSeed: 4,
-          popularity: 'balanced',
-        })
-        .expect(400);
+      await previewRequest('mix', {
+        kind: 'genre_mix',
+        genreIds: ['jazz'],
+        region: 'argentina',
+        tracksPerSeed: 4,
+        popularity: 'balanced',
+      }).expect(400);
 
-      expect(world.provider.createPlaylist).not.toHaveBeenCalled();
+      expectNoSpotifyWrites();
     });
 
     it('rejects a region on an artist mix instead of ignoring it', async () => {
-      await request(httpServer())
-        .post('/api/playlists/mix')
-        .send({
-          kind: 'artist_mix',
-          artistIds: ['artist-1'],
-          filters: { region: 'argentina' },
-          tracksPerSeed: 4,
-          popularity: 'balanced',
-        })
-        .expect(400);
+      await previewRequest('mix', {
+        kind: 'artist_mix',
+        artistIds: ['artist-1'],
+        filters: { region: 'argentina' },
+        tracksPerSeed: 4,
+        popularity: 'balanced',
+      }).expect(400);
 
-      expect(world.provider.createPlaylist).not.toHaveBeenCalled();
+      expectNoSpotifyWrites();
     });
   });
 
@@ -723,20 +717,16 @@ describe('Spotify Mode generation characterization', () => {
         new CatalogUnavailableError(),
       );
 
-      const response = await request(httpServer())
-        .post('/api/playlists/mix')
-        .send({
-          kind: 'genre_mix',
-          genreIds: ['jazz'],
-          tracksPerSeed: 4,
-          popularity: 'balanced',
-        })
-        .expect(503);
+      const response = await previewRequest('mix', {
+        kind: 'genre_mix',
+        genreIds: ['jazz'],
+        tracksPerSeed: 4,
+        popularity: 'balanced',
+      }).expect(503);
 
       expect(response.body).toMatchObject({ code: 'CATALOG_UNAVAILABLE' });
       expect(world.provider.searchArtists).not.toHaveBeenCalled();
-      expect(world.provider.createPlaylist).not.toHaveBeenCalled();
-      expect(world.usageStats.recordMix).not.toHaveBeenCalled();
+      expectNoSpotifyWrites();
     });
   });
 
@@ -753,20 +743,15 @@ describe('Spotify Mode generation characterization', () => {
       popularity: 'balanced',
     };
 
-    it('builds from similar artists, excludes the seed, publishes, and records the seed', async () => {
-      const response = await request(httpServer())
-        .post('/api/playlists/discover')
-        .send(discoverArtistBody)
-        .expect(201);
+    it('builds from similar artists, excludes the seed, publishes on save, and records the seed', async () => {
+      const { previewId, playlist } = await preview(
+        'discover',
+        discoverArtistBody,
+      );
 
-      const playlist = PlaylistDetailSchema.parse(response.body);
       expect(playlist).toMatchObject({
         name: 'Blendify · Discover · Sade',
         description: 'In the orbit of Sade. Made with Blendify.',
-        kind: 'discover_artist',
-        status: 'COMPLETED',
-        spotifyId: SPOTIFY_PLAYLIST.id,
-        trackCount: 15,
         seeds: [
           {
             type: 'artist',
@@ -788,9 +773,14 @@ describe('Spotify Mode generation characterization', () => {
           },
         },
       });
+      expect(playlist.tracks).toHaveLength(15);
       expect(playlist.tracks.some((track) => track.artistId === 'sade')).toBe(
         false,
       );
+      expectNoSpotifyWrites();
+
+      await saved(previewId);
+
       expect(world.provider.createPlaylist).toHaveBeenCalledTimes(1);
       expect(publishedUris()).toEqual(
         playlist.tracks.map((track) => track.uri),
@@ -811,52 +801,41 @@ describe('Spotify Mode generation characterization', () => {
       });
     });
 
-    it('streams monotonic progress through publishing', async () => {
-      const response = await request(httpServer())
-        .post('/api/playlists/discover')
+    it('streams monotonic progress that ends at the preview', async () => {
+      const response = await previewRequest('discover', discoverArtistBody)
         .set('Accept', 'application/x-ndjson')
         .buffer(true)
         .parse(readNdjson)
-        .send(discoverArtistBody)
         .expect(200);
 
       const events = parseEvents(response.body as string);
       const percents = progressEvents(events).map((event) => event.percent);
       expect(percents).toEqual([...percents].sort((a, b) => a - b));
-      expect(distinctPhases(events).at(-1)).toBe('publishing');
-      expect(percents.at(-1)).toBe(100);
+      expect(distinctPhases(events).at(-1)).toBe('matching_tracks');
       expect(events.at(-1)?.type).toBe('result');
     });
   });
 
   describe('discover track', () => {
-    it('builds from similar tracks, excludes the seed track, publishes, and records the seed artist', async () => {
+    it('builds from similar tracks, excludes the seed track, publishes on save, and records the seed artist', async () => {
       const seed = makeTrack('Sade', 'Smooth Operator');
 
-      const response = await request(httpServer())
-        .post('/api/playlists/discover')
-        .send({
-          kind: 'discover_track',
-          trackId: seed.id.getValue(),
-          track: {
-            id: seed.id.getValue(),
-            name: 'Smooth Operator',
-            artistId: 'sade',
-            artistName: 'Sade',
-          },
-          targetTrackCount: 15,
-          popularity: 'balanced',
-        })
-        .expect(201);
+      const { previewId, playlist } = await preview('discover', {
+        kind: 'discover_track',
+        trackId: seed.id.getValue(),
+        track: {
+          id: seed.id.getValue(),
+          name: 'Smooth Operator',
+          artistId: 'sade',
+          artistName: 'Sade',
+        },
+        targetTrackCount: 15,
+        popularity: 'balanced',
+      });
 
-      const playlist = PlaylistDetailSchema.parse(response.body);
       expect(playlist).toMatchObject({
         name: 'Blendify · Discover · Smooth Operator',
         description: 'Around “Smooth Operator” by Sade. Made with Blendify.',
-        kind: 'discover_track',
-        status: 'COMPLETED',
-        spotifyId: SPOTIFY_PLAYLIST.id,
-        trackCount: 15,
         seeds: [
           {
             type: 'track',
@@ -882,9 +861,14 @@ describe('Spotify Mode generation characterization', () => {
           },
         },
       });
+      expect(playlist.tracks).toHaveLength(15);
       expect(
         playlist.tracks.some((track) => track.id === seed.id.getValue()),
       ).toBe(false);
+      expectNoSpotifyWrites();
+
+      await saved(previewId);
+
       expect(world.provider.createPlaylist).toHaveBeenCalledTimes(1);
       expect(publishedUris()).toEqual(
         playlist.tracks.map((track) => track.uri),
@@ -905,7 +889,7 @@ describe('Spotify Mode generation characterization', () => {
     });
   });
 
-  describe('Spotify provider failures while publishing', () => {
+  describe('Spotify provider failures while saving', () => {
     const discoverArtistBody = {
       kind: 'discover_artist',
       artistId: 'sade',
@@ -914,15 +898,8 @@ describe('Spotify Mode generation characterization', () => {
       popularity: 'balanced',
     };
 
-    async function streamDiscover(body: object = discoverArtistBody) {
-      const response = await request(httpServer())
-        .post('/api/playlists/discover')
-        .set('Accept', 'application/x-ndjson')
-        .buffer(true)
-        .parse(readNdjson)
-        .send(body)
-        .expect(200);
-      return parseEvents(response.body as string);
+    function previewDiscover() {
+      return preview('discover', discoverArtistBody);
     }
 
     function expectNoPublishSideEffects() {
@@ -931,7 +908,7 @@ describe('Spotify Mode generation characterization', () => {
       expect(world.usageStats.recordMix).not.toHaveBeenCalled();
     }
 
-    it('reports a 502 on playlist creation as unconfirmed and creates nothing more', async () => {
+    it('settles a 502 on playlist creation as an unconfirmed outcome and never retries it', async () => {
       world.provider.createPlaylist.mockRejectedValueOnce(
         new ProviderOutcomeUnknownError(
           'Spotify createPlaylist outcome unknown',
@@ -942,20 +919,17 @@ describe('Spotify Mode generation characterization', () => {
           },
         ),
       );
+      const { previewId } = await previewDiscover();
 
-      const events = await streamDiscover();
+      const first = await saved(previewId);
+      const again = await saved(previewId);
 
-      expect(events.at(-1)).toEqual({
-        type: 'error',
-        statusCode: 502,
-        code: 'SPOTIFY_OUTCOME_UNKNOWN',
-        message: expect.any(String) as string,
-        details: {
-          operation: 'createPlaylist',
-          category: 'upstream_error',
-          status: 502,
-        },
+      expect(first.destination).toEqual({
+        status: 'publish_incomplete',
+        spotifyUrl: null,
+        reason: 'outcome_unknown',
       });
+      expect(again.destination).toEqual(first.destination);
       expect(world.provider.createPlaylist).toHaveBeenCalledTimes(1);
       expectNoPublishSideEffects();
     });
@@ -968,17 +942,20 @@ describe('Spotify Mode generation characterization', () => {
           status: null,
         }),
       );
+      const { previewId } = await previewDiscover();
 
-      const events = await streamDiscover();
+      const response = await save(previewId).expect(503);
 
-      expect(events.at(-1)).toMatchObject({
-        type: 'error',
+      expect(response.body).toMatchObject({
         statusCode: 503,
         code: 'SPOTIFY_UNAVAILABLE',
         details: { operation: 'createPlaylist', category: 'network' },
       });
-      expect(world.provider.createPlaylist).toHaveBeenCalledTimes(1);
       expectNoPublishSideEffects();
+
+      const retry = await saved(previewId);
+      expect(retry.destination).toMatchObject({ status: 'published' });
+      expect(world.provider.createPlaylist).toHaveBeenCalledTimes(2);
     });
 
     it('keeps the created playlist link when adding songs fails', async () => {
@@ -989,43 +966,47 @@ describe('Spotify Mode generation characterization', () => {
           status: null,
         }),
       );
+      const { previewId } = await previewDiscover();
 
-      const events = await streamDiscover();
+      const state = await saved(previewId);
 
-      expect(events.at(-1)).toMatchObject({
-        type: 'error',
-        statusCode: 502,
-        code: 'SPOTIFY_PLAYLIST_INCOMPLETE',
-        details: {
-          spotifyId: SPOTIFY_PLAYLIST.id,
-          spotifyUrl: SPOTIFY_PLAYLIST.url,
-          failedStep: 'add_tracks',
-          tracksAdded: 'unknown',
-        },
+      expect(state.destination).toEqual({
+        status: 'publish_incomplete',
+        spotifyUrl: SPOTIFY_PLAYLIST.url,
+        reason: 'tracks_incomplete',
       });
       expect(world.provider.createPlaylist).toHaveBeenCalledTimes(1);
       expect(world.provider.addTracksToPlaylist).toHaveBeenCalledTimes(1);
       expect(world.playlists.save).not.toHaveBeenCalled();
+      expect(world.usageStats.recordMix).not.toHaveBeenCalled();
+    });
+
+    it('keeps the playlist and flags only the Library when saving to it fails', async () => {
+      world.playlists.save.mockRejectedValueOnce(new Error('db down'));
+      const { previewId } = await previewDiscover();
+
+      const state = await saved(previewId);
+
+      expect(state.destination).toMatchObject({
+        status: 'publish_incomplete',
+        spotifyUrl: SPOTIFY_PLAYLIST.url,
+        reason: 'library_not_saved',
+      });
+      expect(world.provider.createPlaylist).toHaveBeenCalledTimes(1);
     });
 
     it('completes the playlist and flags only the cover when the cover upload fails', async () => {
       world.provider.uploadPlaylistCover.mockRejectedValueOnce(
         new Error('cover rejected'),
       );
+      const { previewId } = await previewDiscover();
 
-      const events = await streamDiscover({
-        ...discoverArtistBody,
-        coverImageBase64: 'jpeg-data',
-      });
+      const state = await saved(previewId, { coverImageBase64: 'jpeg-data' });
 
-      const last = events.at(-1);
-      expect(last).toMatchObject({
-        type: 'result',
-        playlist: {
-          status: 'COMPLETED',
-          spotifyId: SPOTIFY_PLAYLIST.id,
-          coverUploadFailed: true,
-        },
+      expect(state.destination).toMatchObject({
+        status: 'published',
+        spotifyId: SPOTIFY_PLAYLIST.id,
+        coverUploadFailed: true,
       });
       expect(world.provider.createPlaylist).toHaveBeenCalledTimes(1);
       expect(world.playlists.save).toHaveBeenCalledTimes(1);
@@ -1049,26 +1030,23 @@ describe('Spotify Mode generation characterization', () => {
         'SPOTIFY_PERMISSION_DENIED',
       ],
     ])(
-      'keeps %s distinct from input problems',
+      'keeps %s distinct from input problems and allows a retry',
       async (_label, failure, statusCode, code) => {
         world.provider.createPlaylist.mockRejectedValueOnce(failure);
+        const { previewId } = await previewDiscover();
 
-        const events = await streamDiscover();
+        const response = await save(previewId).expect(statusCode);
 
-        expect(events.at(-1)).toMatchObject({
-          type: 'error',
-          statusCode,
-          code,
-        });
+        expect(response.body).toMatchObject({ statusCode, code });
         expectNoPublishSideEffects();
       },
     );
 
-    it('reports a seed song Spotify cannot find as an input problem, not a provider failure', async () => {
+    it('reports a seed song Spotify cannot find at preview time as an input problem', async () => {
       world.provider.searchTracks.mockResolvedValue([]);
       world.provider.resolveTrack.mockResolvedValue(null);
 
-      const events = await streamDiscover({
+      const response = await previewRequest('discover', {
         kind: 'discover_track',
         trackId: 'missing-song',
         track: {
@@ -1079,15 +1057,14 @@ describe('Spotify Mode generation characterization', () => {
         },
         targetTrackCount: 15,
         popularity: 'balanced',
-      });
+      }).expect(422);
 
-      expect(events.at(-1)).toMatchObject({
-        type: 'error',
+      expect(response.body).toMatchObject({
         statusCode: 422,
         code: 'TRACK_RESOLVE_FAILED',
         details: { name: 'Un Beso en la Nariz' },
       });
-      expect(world.provider.createPlaylist).not.toHaveBeenCalled();
+      expectNoSpotifyWrites();
     });
   });
 });

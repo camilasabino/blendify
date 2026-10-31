@@ -29,10 +29,7 @@ import {
   type ProgressReporter,
 } from '@/application/services/generation-progress.tracker';
 
-const GenerateGenreMixSchema = GenreMixRequestSchema.omit({
-  coverImageBase64: true,
-  persistToLibrary: true,
-}).extend({
+const GenerateGenreMixSchema = GenreMixRequestSchema.extend({
   market: z.string().optional(),
 });
 

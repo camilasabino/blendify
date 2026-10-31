@@ -1,4 +1,4 @@
-import type { PublishedPlaylist } from '@blendify/contracts';
+import type { PublishedPlaylist } from '@/application/services/publish-playlist.service';
 import { CoordinationUnavailableError } from '@/domain/errors/coordination-unavailable.error';
 import { PlaylistPublishIncompleteError } from '@/domain/errors/playlist-publish-incomplete.error';
 import { ProviderOutcomeUnknownError } from '@/domain/errors/provider-outcome-unknown.error';

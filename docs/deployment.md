@@ -915,8 +915,8 @@ Testing).
 
 - [ ] Connect Spotify from the landing page → consent → callback lands on
       `/app`; started from `/app/mix` it comes back to `/app/mix`.
-- [ ] Publish a Mix and a Discover playlist with "Add a cover image" on; they
-      appear in Spotify with the Blendify graphic cover (no Spotify artist or
+- [ ] Preview a Mix and a Discover playlist (nothing is written to Spotify),
+      then Save to Spotify with "Add a cover image" on; they appear in Spotify with the Blendify graphic cover (no Spotify artist or
       album artwork in it).
 - [ ] Library and Stats load.
 - [ ] Log out → the Guest App Home at `/app` works.
@@ -1664,7 +1664,7 @@ No GitHub eval workflow exists yet. If one is added, it must be a separate
 
 Spotify Mode Mix and Discover move from "generate and publish" to "generate →
 preview → Save to Spotify". The work ships in four deploys (R1–R4). This
-section covers R1 and the contract with the later steps.
+section covers R1 to R3 and the contract with R4.
 
 ### 20.1 Endpoints and rollout status
 
@@ -1673,21 +1673,21 @@ All routes require the session cookie and the origin/CSRF guard. They are in
 
 | Route | Purpose | Limits | Status |
 |---|---|---|---|
-| `POST /api/previews/mix` | Generate a Mix preview (JSON or NDJSON progress) | `generation` bucket, generation concurrency | R1: deployed with the API, unused by the web |
+| `POST /api/previews/mix` | Generate a Mix preview (JSON or NDJSON progress) | `generation` bucket, generation concurrency | R1: deployed with the API; used by the web since R2 |
 | `POST /api/previews/discover` | Generate a Discover preview | same | R1 |
 | `GET /api/previews/:previewId` | Read the preview and its save outcome | none | R1 |
 | `POST /api/previews/:previewId/save` | Publish the stored preview to Spotify | `publish` bucket (new attempts only), generation concurrency | R1 |
+| `POST /api/playlists/mix`, `POST /api/playlists/discover` | Retired publish-on-generate routes: `410 CLIENT_OUTDATED` | none | R3 (section 20.9) |
 
 Rollout:
 
 | Step | What | Status |
 |---|---|---|
-| R1 | API adds the preview routes, the shared publication runner and the `publish` bucket. Legacy `POST /api/playlists/mix|discover` unchanged. Create with AI wire shape unchanged | This deploy |
-| R2 | Web switches to `/api/previews/*` | Not started |
-| R3 | Legacy routes answer `410 CLIENT_OUTDATED`; old code removed | Not started |
+| R1 | API adds the preview routes, the shared publication runner and the `publish` bucket. Legacy `POST /api/playlists/mix|discover` unchanged. Create with AI wire shape unchanged | Deployed |
+| R2 | Web switches to `/api/previews/*` | Deployed |
+| R3 | Legacy routes answer `410 CLIENT_OUTDATED`; old code removed; Create with AI responses carry the optional destination fields | Implemented locally (M-D), not deployed |
 | R4 | `410` stubs removed | Not started |
 
-The current frontend does not call any preview route and is unaffected by R1.
 Save never regenerates: it publishes the stored tracks, order and recipe, and
 it creates at most one Spotify playlist per preview. Spotify has no
 idempotency key for playlist creation, so after an ambiguous create Blendify
@@ -1750,6 +1750,12 @@ Exceptional cases that do consume one unit:
   while the attempt record is written (no Spotify call was made);
 - a `429` from the bucket itself, by definition.
 
+The unit is consumed before the conditional start of the attempt record, so
+the two exceptional paths above can spend a unit without any publication
+starting. They are rare (a lost lease, a Redis failure between claim and
+start) and bounded by the 12-per-10-minutes limit. The retired legacy routes
+(section 20.9) never touch the bucket.
+
 Raising or lowering the limit: `RATE_LIMIT_OVERRIDES=publish=<limit>/<seconds>`
 (a variable change redeploys the API).
 
@@ -1788,7 +1794,8 @@ Non-destructive; no Spotify write and no generation:
       (a 22-character id).
 - [ ] The web still loads and the legacy flows are unchanged (section 13,
       Spotify Mode): Mix/Discover publish through the legacy routes, Create
-      with AI publish works, Library and Stats load.
+      with AI publish works, Library and Stats load. (R1 only; after R2 the
+      web uses previews and after R3 the legacy routes answer `410`.)
 - [ ] Optional, with an allowlisted session and the user's explicit
       decision: `GET /api/previews/<unknown 22-character id>` → `404
       PREVIEW_NOT_FOUND`.
@@ -1802,7 +1809,7 @@ validated locally (see the section 13 intro).
 |---|---|
 | Problem after R1 | Roll back the API (Railway → `api` → Deployments → previous successful). The web does not use previews, so there is no user impact. Preview records expire on their own (30 min / 24 h). Create with AI records written by R1 may carry extra optional fields; the previous code ignores them |
 | Problem after R2 | Roll back the **web first**, then the API if needed. The reverse order leaves the new web against an API without previews |
-| Problem after R3 | Roll back the API to R2 (legacy routes return). Both web versions then work |
+| Problem after R3 | Roll back the API to R2 (legacy routes return, Create with AI responses lose the optional destination fields). Both web versions then work. Never roll the web back past R2 while the API is at R3: the old web would receive `410` |
 | Publish abuse or Spotify quota pressure | `RATE_LIMIT_OVERRIDES=publish=1/3600` on `api` (redeploys) |
 | Redis memory pressure | Section 6; previews and destinations expire on their own, nothing to purge |
 
@@ -1834,3 +1841,63 @@ There is no data rollback: Redis records expire and PostgreSQL is untouched.
 - **Account deletion** does not purge preview or destination keys; they
   expire on their own. Privacy copy for this ships in R2.
 - **Statistics** count published playlists only once the web switches (R2).
+
+### 20.9 R3 — retired publish-on-generate routes
+
+R3 removes the generate-and-publish backend. It needs no environment variable,
+no IaC change and no PostgreSQL migration. Ship it at least 24 hours after R2
+(the single user can shorten this after reloading their own tabs), so no open
+tab still runs a bundle that calls the old routes.
+
+**Legacy routes.** `POST /api/playlists/mix` and `POST /api/playlists/discover`
+answer `410` with the normal error envelope:
+
+```json
+{ "statusCode": 410, "code": "CLIENT_OUTDATED", "message": "This version of Blendify is outdated. Reload the page to continue." }
+```
+
+They are handled by `rejectLegacyPublishEndpoints`
+(`apps/api/src/presentation/http/legacy-publish-endpoints.ts`), an Express
+middleware registered in `main.ts` after CORS and before the body parser. The
+response therefore comes before body parsing, authentication, the origin
+guard, rate limiting, generation concurrency, generation and any provider
+call. Any body is accepted (oversized or malformed included), nothing is
+charged to any bucket, and the CORS headers stay on the response so an old tab
+can read the `410`. An old tab treats the response as a definite failure, not
+an uncertain one, so it neither recreates the playlist nor writes anything.
+
+**Event.** Each rejection logs `legacy_publish_endpoint.rejected` with
+`requestId` and `endpoint` (`mix` or `discover`). It carries no user, session,
+playlist name, seed or body content. R4 may ship after 7 days with zero such
+events.
+
+**Removed in R3:** `CreateSpotifyPlaylistUseCase`, the `CreateMixRequest`,
+`CreateDiscoverRequest`, `PublishedPlaylist` and `GenerationStreamEvent`
+contracts, the `publishing` generation phase and the publish progress
+tracking, and the two legacy body-limit entries.
+
+**Create with AI.** The session response now carries the optional destination
+fields: `spotifyId` and `coverUploadFailed` on `published`, `reason` on
+`publish_incomplete`. A session stored before those fields existed omits them
+(the contract keeps them optional). Generation and publication behavior is
+unchanged. A bundle older than R2 may fail to parse the added fields and
+recovers on reload.
+
+**Verification (non-destructive, no session needed):**
+
+- [ ] `GET /api/health` → `200`, `database: up`.
+- [ ] `curl -si -X POST https://api.blendify.camilasabino.dev/api/playlists/mix -H 'Origin: https://blendify.camilasabino.dev' -H 'Content-Type: application/json' -d '{}'`
+      → `410` with `"code":"CLIENT_OUTDATED"`, no `Set-Cookie`, and
+      `Access-Control-Allow-Origin: https://blendify.camilasabino.dev`.
+- [ ] The same request to `/api/playlists/discover` → `410`.
+- [ ] Railway logs show `legacy_publish_endpoint.rejected` for those calls and
+      no sensitive field in it.
+- [ ] The web still loads (hard reload on `/app/mix`).
+
+Do not create a playlist in production to test it.
+
+**R3 grep gate.** Before review the repository has no reference to
+`CreateSpotifyPlaylistUseCase`, `CreateMixRequest`, `CreateDiscoverRequest`,
+`GenerationStreamEventSchema`, `PublishedPlaylist` (outside the publication
+service type), `createMix`, `createDiscover` or the `'publishing'` generation
+phase, apart from the retired-route middleware and its tests.

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import * as contracts from './index';
 import {
   MUSIC_REGIONS,
   MUSIC_REGION_NAMES,
@@ -14,9 +15,7 @@ import {
   SpotifyThrottleDetailsSchema,
   ApiErrorResponseSchema,
   ArtistSchema,
-  CreateDiscoverRequestSchema,
   CreateTransferRequestSchema,
-  CreateMixRequestSchema,
   GenerateDiscoverRequestSchema,
   GenerateMixRequestSchema,
   DiscoverArtistRequestSchema,
@@ -24,7 +23,6 @@ import {
   DiscoverTrackTargetSchema,
   GeneratedPlaylistSchema,
   GeneratedPlaylistStreamEventSchema,
-  GenerationStreamEventSchema,
   DeletePlaylistQuerySchema,
   LibrarySyncResultSchema,
   MAX_ARTISTS,
@@ -42,7 +40,7 @@ import {
 
 describe('playlist contracts', () => {
   it('applies canonical defaults to an artist mix', () => {
-    const request = CreateMixRequestSchema.parse({
+    const request = GenerateMixRequestSchema.parse({
       kind: 'artist_mix',
       artistIds: ['artist-1'],
       tracksPerSeed: 10,
@@ -53,13 +51,12 @@ describe('playlist contracts', () => {
       name: '',
       description: '',
       orderMode: 'random',
-      persistToLibrary: true,
     });
   });
 
   it('rejects removed compatibility fields', () => {
     expect(() =>
-      CreateMixRequestSchema.parse({
+      GenerateMixRequestSchema.parse({
         kind: 'artist_mix',
         artistIds: ['artist-1'],
         tracksPerSeed: 10,
@@ -76,7 +73,7 @@ describe('playlist contracts', () => {
     );
 
     expect(() =>
-      CreateMixRequestSchema.parse({
+      GenerateMixRequestSchema.parse({
         kind: 'artist_mix',
         artistIds,
         tracksPerSeed: 1,
@@ -87,7 +84,7 @@ describe('playlist contracts', () => {
 
   it('requires the matching seed shape for Discover', () => {
     expect(() =>
-      CreateDiscoverRequestSchema.parse({
+      GenerateDiscoverRequestSchema.parse({
         kind: 'discover_track',
         trackId: 'track-1',
         targetTrackCount: 30,
@@ -675,14 +672,22 @@ describe('guest generation contracts', () => {
     expect(schema.safeParse({ ...body, ...extra }).success).toBe(false);
   });
 
-  it('keeps Spotify Mode requests accepting publication fields', () => {
-    expect(
-      CreateMixRequestSchema.parse({
-        ...artistMix,
-        coverImageBase64: 'aGVsbG8=',
-        persistToLibrary: false,
-      }),
-    ).toMatchObject({ coverImageBase64: 'aGVsbG8=', persistToLibrary: false });
+  it('no longer exports the publish-on-generate contracts', () => {
+    for (const removed of [
+      'CreateMixRequestSchema',
+      'CreateDiscoverRequestSchema',
+      'PublishedPlaylistSchema',
+      'GenerationStreamEventSchema',
+    ]) {
+      expect(contracts).not.toHaveProperty(removed);
+    }
+    expect(contracts.GENERATION_PHASES).toEqual([
+      'resolving_seeds',
+      'matching_tracks',
+    ]);
+    expect(contracts.GenerationPhaseSchema.safeParse('publishing').success).toBe(
+      false,
+    );
   });
 
   const generated = {
@@ -744,7 +749,6 @@ describe('guest generation contracts', () => {
     const result = { type: 'result', playlist: generated };
 
     expect(GeneratedPlaylistStreamEventSchema.parse(result)).toEqual(result);
-    expect(GenerationStreamEventSchema.safeParse(result).success).toBe(false);
     expect(
       GeneratedPlaylistStreamEventSchema.parse({
         type: 'progress',
@@ -1028,38 +1032,5 @@ describe('Spotify provider failure contracts', () => {
         .success,
     ).toBe(false);
     expect(SpotifyFailureDetailsSchema.safeParse({ ...base, retryAfterSeconds: 0 }).success).toBe(false);
-  });
-
-  it('carries a cover upload failure on a published playlist stream result', () => {
-    const parsed = GenerationStreamEventSchema.parse({
-      type: 'result',
-      playlist: {
-        id: 'playlist-1',
-        name: 'Mix',
-        description: '',
-        kind: 'artist_mix',
-        seeds: [{ type: 'artist', id: 'artist-1', name: 'Sade' }],
-        seedCount: 1,
-        trackCount: 0,
-        totalDurationMs: 0,
-        spotifyUrl: 'https://open.spotify.com/playlist/spotify-1',
-        spotifyId: 'spotify-1',
-        status: 'COMPLETED',
-        imageUrl: null,
-        createdAt: '2026-09-30T12:00:00.000Z',
-        updatedAt: '2026-09-30T12:00:00.000Z',
-        tracks: [],
-        generation: {
-          version: 1,
-          kind: 'artist_mix',
-          tracksPerSeed: 1,
-          seeds: [{ id: 'artist-1', name: 'Sade' }],
-          popularity: 'balanced',
-          orderMode: 'random',
-        },
-        coverUploadFailed: true,
-      },
-    });
-    expect(parsed.type === 'result' && parsed.playlist.coverUploadFailed).toBe(true);
   });
 });

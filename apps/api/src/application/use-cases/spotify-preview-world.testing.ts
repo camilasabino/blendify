@@ -1,4 +1,4 @@
-import type { PublishedPlaylist } from '@blendify/contracts';
+import type { PublishedPlaylist } from '@/application/services/publish-playlist.service';
 import type { SpotifyPreviewPlaylist } from '@/domain/preview/spotify-preview';
 import type { MusicProviderPort } from '@/domain/repositories/music-provider.port';
 import type { UsageStatsRepositoryPort } from '@/domain/repositories/usage-stats.repository.port';

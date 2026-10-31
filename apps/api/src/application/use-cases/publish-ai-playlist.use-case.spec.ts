@@ -332,6 +332,7 @@ describe('PublishAiPlaylistUseCase', () => {
     expect(publicDestination(session)).toEqual({
       status: 'publish_incomplete',
       spotifyUrl: 'https://sp/p0',
+      reason: 'interrupted',
     });
     expect(world.stored()).toBe(session);
     expect(world.publish).not.toHaveBeenCalled();
@@ -443,6 +444,7 @@ describe('PublishAiPlaylistUseCase', () => {
     expect(publicDestination(incomplete.session)).toEqual({
       status: 'publish_incomplete',
       spotifyUrl: 'https://sp/p1',
+      reason: 'tracks_incomplete',
     });
     expect(replay.session).toBe(incomplete.session);
     expect(world.publish).toHaveBeenCalledTimes(1);
@@ -489,6 +491,7 @@ describe('PublishAiPlaylistUseCase', () => {
       expect(publicDestination(session)).toEqual({
         status: 'publish_incomplete',
         spotifyUrl: null,
+        reason: 'outcome_unknown',
       });
       expect(replay.session).toBe(session);
       expect(world.publish).toHaveBeenCalledTimes(1);

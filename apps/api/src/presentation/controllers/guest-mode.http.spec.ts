@@ -10,16 +10,13 @@ import request from 'supertest';
 import {
   GeneratedPlaylistSchema,
   GeneratedPlaylistStreamEventSchema,
-  PlaylistDetailSchema,
   PlaylistTransferSchema,
   type GeneratedPlaylistStreamEvent,
 } from '@blendify/contracts';
 import { GenreCatalogService } from '@/application/services/genre-catalog.service';
 import { GenreTrackCatalogService } from '@/application/services/genre-track-catalog.service';
-import { PublishPlaylistService } from '@/application/services/publish-playlist.service';
 import { BulkLibraryUseCase } from '@/application/use-cases/bulk-library.use-case';
 import { ControlPlaybackUseCase } from '@/application/use-cases/control-playback.use-case';
-import { CreateSpotifyPlaylistUseCase } from '@/application/use-cases/create-spotify-playlist.use-case';
 import { GenerateArtistMixUseCase } from '@/application/use-cases/generate-artist-mix.use-case';
 import { GenerateDiscoverPlaylistUseCase } from '@/application/use-cases/generate-discover-playlist.use-case';
 import { GenerateGenreMixUseCase } from '@/application/use-cases/generate-genre-mix.use-case';
@@ -283,8 +280,6 @@ async function createApp(
       GenerateGenreMixUseCase,
       GenerateDiscoverPlaylistUseCase,
       GeneratePlaylistUseCase,
-      CreateSpotifyPlaylistUseCase,
-      PublishPlaylistService,
       {
         provide: CATALOG_PROVIDER_FACTORY,
         useValue: { forMarket: () => world.provider },
@@ -533,12 +528,6 @@ describe('Guest Mode HTTP boundary', () => {
         path: '/api/playlists/bulk',
         body: { action: 'clear_library' },
       },
-      { method: 'post', path: '/api/playlists/mix', body: artistMixBody },
-      {
-        method: 'post',
-        path: '/api/playlists/discover',
-        body: discoverArtistBody,
-      },
       { method: 'get', path: '/api/stats' },
       { method: 'delete', path: '/api/stats' },
       { method: 'get', path: '/api/player/devices' },
@@ -604,24 +593,6 @@ describe('Guest Mode HTTP boundary', () => {
         .expect(200);
 
       expect(response.body).toEqual({ user: null });
-    });
-
-    it('still publishes, persists, and records stats for an authenticated Spotify Mode request', async () => {
-      const response = await request(httpServer())
-        .post('/api/playlists/mix')
-        .set('Origin', FRONTEND)
-        .set('Cookie', await sessionCookie('user-1'))
-        .send({ ...artistMixBody, coverImageBase64: 'x'.repeat(40_000) })
-        .expect(201);
-
-      expect(PlaylistDetailSchema.parse(response.body)).toMatchObject({
-        spotifyId: 'spotify-playlist-1',
-        status: 'COMPLETED',
-      });
-      expect(world.provider.createPlaylist).toHaveBeenCalledTimes(1);
-      expect(world.provider.uploadPlaylistCover).toHaveBeenCalledTimes(1);
-      expect(world.playlists.save).toHaveBeenCalledTimes(1);
-      expect(world.usageStats.recordMix).toHaveBeenCalledTimes(1);
     });
   });
 

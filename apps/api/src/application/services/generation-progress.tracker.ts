@@ -1,7 +1,7 @@
 import type { GenerationPhase, GenerationProgress } from '@blendify/contracts';
 
 /**
- * Stage weights: preparation 0–10, search 10–90, publish 90–100.
+ * Stage weights: preparation 0–10, search 10–90.
  * Search percent is accepted tracks over the requested target. It measures
  * songs found, not attempts or remaining time, so it can stay still while
  * candidates are rejected and a partial fill ends below 90.
@@ -11,7 +11,6 @@ const PHASE_WEIGHTS: Record<GenerationPhase, { start: number; span: number }> =
   {
     resolving_seeds: { start: 0, span: 10 },
     matching_tracks: { start: 10, span: 80 },
-    publishing: { start: 90, span: 10 },
   };
 
 export type ProgressReporter = (progress: GenerationProgress) => void;

@@ -16,8 +16,8 @@ describe('OriginCsrfGuard', () => {
       switchToHttp: () => ({
         getRequest: () => ({
           method: partial.method ?? 'POST',
-          path: partial.path ?? '/api/playlists/mix',
-          url: partial.path ?? '/api/playlists/mix',
+          path: partial.path ?? '/api/previews/mix',
+          url: partial.path ?? '/api/previews/mix',
           headers: {
             origin: partial.origin,
             referer: partial.referer,
