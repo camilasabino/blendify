@@ -6,7 +6,10 @@ import {
   cleanSyncResult,
   emptyLibraryPage,
   guestJazzPlaylist,
-  spotifyJazzPlaylist,
+  jazzPreview,
+  PREVIEW_ID,
+  previewState,
+  publishedDestination,
 } from '@/test/playlist-fixtures'
 import {
   jsonResponse,
@@ -32,20 +35,23 @@ const matchingProgress = {
   percent: 42,
 }
 
-const spotifyDiscoverPlaylist = {
-  ...spotifyJazzPlaylist,
-  name: 'Blendify · Discover · Sade',
-  kind: 'discover_artist',
-  seeds: [{ type: 'artist', id: 'artist-1', name: 'Sade' }],
-  generation: {
-    version: 1,
-    kind: 'discover_artist',
-    targetTrackCount: 30,
-    seed: { id: 'artist-1', name: 'Sade' },
-    popularity: 'balanced',
-    orderMode: 'random',
+const spotifyDiscoverPreview = jazzPreview({
+  previewId: 'BBBBBBBBBBBBBBBBBBBBBB',
+  playlist: {
+    ...jazzPreview().playlist,
+    name: 'Blendify · Discover · Sade',
+    seeds: [{ type: 'artist', id: 'artist-1', name: 'Sade' }],
+    generation: {
+      version: 1,
+      kind: 'discover_artist',
+      targetTrackCount: 30,
+      seed: { id: 'artist-1', name: 'Sade' },
+      filters: { region: null, femaleVocals: false, releaseRange: null, excludeLive: false },
+      popularity: 'balanced',
+      orderMode: 'random',
+    },
   },
-}
+})
 
 function LocationProbe() {
   const location = useLocation()
@@ -83,8 +89,8 @@ function stubSpotifyApi(overrides: Parameters<typeof stubApi>[0] = {}) {
           },
         ],
       }),
-    'POST /api/playlists/mix': pendingStream,
-    'POST /api/playlists/discover': pendingStream,
+    'POST /api/previews/mix': pendingStream,
+    'POST /api/previews/discover': pendingStream,
     'GET /api/playlists': () => jsonResponse(emptyLibraryPage),
     'POST /api/playlists/sync': () => jsonResponse(cleanSyncResult),
     'GET /api/player/devices': () => jsonResponse({ devices: [] }),
@@ -97,16 +103,15 @@ function generationCalls(calls: FetchCall[]) {
   return calls.filter(
     (call) =>
       call.method === 'POST' &&
-      (call.url === '/api/playlists/mix' ||
-        call.url === '/api/playlists/discover'),
+      (call.url === '/api/previews/mix' || call.url === '/api/previews/discover'),
   )
 }
 
 async function startJazzMix(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole('radio', { name: 'Genres' }))
   await user.click(await screen.findByRole('button', { name: /Jazz/ }))
-  await user.click(screen.getByRole('button', { name: 'Create playlist' }))
-  await screen.findByText('Creating your playlist')
+  await user.click(screen.getByRole('button', { name: 'Generate preview' }))
+  await screen.findByText('Generating your preview')
 }
 
 async function startSadeDiscover(user: ReturnType<typeof userEvent.setup>) {
@@ -114,8 +119,8 @@ async function startSadeDiscover(user: ReturnType<typeof userEvent.setup>) {
   await user.click(
     (await screen.findByRole('option', { name: 'Sade' })).firstElementChild!,
   )
-  await user.click(screen.getByRole('button', { name: 'Create playlist' }))
-  await screen.findByText('Creating your playlist')
+  await user.click(screen.getByRole('button', { name: 'Generate preview' }))
+  await screen.findByText('Generating your preview')
 }
 
 async function goTo(user: ReturnType<typeof userEvent.setup>, name: string) {
@@ -160,16 +165,14 @@ describe('Spotify Mix generation across navigation', () => {
     ).toHaveAttribute('href', '/app/mix')
     expect(generationCalls(calls)).toHaveLength(1)
 
-    streams[0].push({ type: 'result', playlist: spotifyJazzPlaylist })
+    streams[0].push({ type: 'result', playlist: jazzPreview() })
     streams[0].close()
 
-    expect(await within(statusRegion()).findByText('Your Mix is ready')).toBeVisible()
-    expect(invalidate).toHaveBeenCalledTimes(2)
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['usage-stats'] })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['playlists'] })
+    expect(await within(statusRegion()).findByText('Your Mix preview is ready · not saved')).toBeVisible()
+    expect(invalidate).not.toHaveBeenCalled()
 
     await user.click(
-      within(statusRegion()).getByRole('link', { name: 'View playlist' }),
+      within(statusRegion()).getByRole('link', { name: 'View preview' }),
     )
     expect(screen.getByTestId('location')).toHaveTextContent('/app/mix')
     expect(
@@ -184,7 +187,7 @@ describe('Spotify Mix generation across navigation', () => {
       await screen.findByRole('heading', { name: 'Blendify · Mix · Jazz' }),
     ).toBeVisible()
     expect(screen.queryByRole('region', { name: 'Playlist creation' })).toBeNull()
-    expect(invalidate).toHaveBeenCalledTimes(2)
+    expect(invalidate).not.toHaveBeenCalled()
     expect(generationCalls(calls)).toHaveLength(1)
   })
 
@@ -198,15 +201,15 @@ describe('Spotify Mix generation across navigation', () => {
     await goTo(user, 'Stats')
     await goTo(user, 'Mix')
 
-    expect(await screen.findByText('Creating your playlist')).toBeVisible()
+    expect(await screen.findByText('Generating your preview')).toBeVisible()
     expect(await screen.findByText('42%')).toBeVisible()
     expect(
-      screen.getByRole('button', { name: 'Creating…', hidden: true }),
+      screen.getByRole('button', { name: 'Generating…', hidden: true }),
     ).toBeDisabled()
     expect(screen.queryByRole('region', { name: 'Playlist creation' })).toBeNull()
     expect(generationCalls(calls)).toHaveLength(1)
 
-    streams[0].push({ type: 'result', playlist: spotifyJazzPlaylist })
+    streams[0].push({ type: 'result', playlist: jazzPreview() })
     streams[0].close()
     expect(
       await screen.findByRole('heading', { name: 'Blendify · Mix · Jazz' }),
@@ -253,9 +256,9 @@ describe('Spotify Mix generation across navigation', () => {
 
     await startJazzMix(user)
     await goTo(user, 'Library')
-    streams[0].push({ type: 'result', playlist: spotifyJazzPlaylist })
+    streams[0].push({ type: 'result', playlist: jazzPreview() })
     streams[0].close()
-    await within(statusRegion()).findByText('Your Mix is ready')
+    await within(statusRegion()).findByText('Your Mix preview is ready · not saved')
 
     await goTo(user, 'Mix')
     await goTo(user, 'Stats')
@@ -263,7 +266,7 @@ describe('Spotify Mix generation across navigation', () => {
     await goTo(user, 'Library')
 
     expect(screen.queryByRole('region', { name: 'Playlist creation' })).toBeNull()
-    expect(screen.queryByText('Your Mix is ready')).toBeNull()
+    expect(screen.queryByText('Your Mix preview is ready · not saved')).toBeNull()
   })
 })
 
@@ -279,9 +282,9 @@ describe('Spotify generation lifecycle boundaries', () => {
       within(statusRegion()).getByText('Creating your Mix'),
     ).toBeVisible()
 
-    streams[0].push({ type: 'result', playlist: spotifyJazzPlaylist })
+    streams[0].push({ type: 'result', playlist: jazzPreview() })
     streams[0].close()
-    await within(statusRegion()).findByText('Your Mix is ready')
+    await within(statusRegion()).findByText('Your Mix preview is ready · not saved')
     await goTo(user, 'Mix')
 
     expect(
@@ -354,10 +357,10 @@ describe('Spotify Discover generation across navigation', () => {
       within(statusRegion()).getByRole('link', { name: 'View progress' }),
     ).toHaveAttribute('href', '/app/discover')
 
-    streams[0].push({ type: 'result', playlist: spotifyDiscoverPlaylist })
+    streams[0].push({ type: 'result', playlist: spotifyDiscoverPreview })
     streams[0].close()
-    await within(statusRegion()).findByText('Your Discover playlist is ready')
-    expect(invalidate).toHaveBeenCalledTimes(2)
+    await within(statusRegion()).findByText('Your Discover preview is ready · not saved')
+    expect(invalidate).not.toHaveBeenCalled()
 
     await goTo(user, 'Discover')
     expect(
@@ -378,7 +381,7 @@ describe('Spotify Discover generation across navigation', () => {
     await user.click(
       (await screen.findByRole('option', { name: 'Sade' })).firstElementChild!,
     )
-    expect(screen.getByRole('button', { name: 'Create playlist' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Generate preview' })).toBeDisabled()
     expect(
       screen.getByText('Wait for your Mix to finish before creating another playlist.'),
     ).toBeVisible()
@@ -511,5 +514,315 @@ describe('Guest generation across navigation', () => {
 
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.getByTestId('location')).toHaveTextContent('/app/library')
+  })
+})
+
+describe('Spotify preview save across navigation and reloads', () => {
+  const STORAGE_KEY = 'blendify.spotifyPreview'
+  const SAVE_ROUTE = `POST /api/previews/${PREVIEW_ID}/save`
+  const STATE_ROUTE = `GET /api/previews/${PREVIEW_ID}`
+
+  function deferred() {
+    let resolve: (response: Response) => void = () => {}
+    const promise = new Promise<Response>((done) => {
+      resolve = done
+    })
+    return { promise, resolve }
+  }
+
+  async function reachMixPreview(
+    user: ReturnType<typeof userEvent.setup>,
+    api: ReturnType<typeof stubSpotifyApi>,
+  ) {
+    await startJazzMix(user)
+    api.streams[0].push({ type: 'result', playlist: jazzPreview() })
+    api.streams[0].close()
+    await screen.findByText('Preview · not saved yet')
+  }
+
+  function warnsBeforeUnload() {
+    const event = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(event)
+    return event.defaultPrevented
+  }
+
+  beforeEach(() => {
+    sessionStorage.clear()
+  })
+
+  it('keeps a save running while the listener navigates and reports the outcome in the shell', async () => {
+    const user = userEvent.setup()
+    const save = deferred()
+    const api = stubSpotifyApi({ [SAVE_ROUTE]: () => save.promise })
+    const { queryClient } = renderApp('/app/mix')
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    await reachMixPreview(user, api)
+
+    await user.click(screen.getByRole('button', { name: 'Save to Spotify' }))
+    expect(warnsBeforeUnload()).toBe(true)
+    await goTo(user, 'Library')
+
+    expect(
+      await within(statusRegion()).findByText('Saving your Mix to Spotify'),
+    ).toBeVisible()
+    save.resolve(jsonResponse(previewState(publishedDestination)))
+    expect(
+      await within(statusRegion()).findByText('Your Mix is saved to Spotify'),
+    ).toBeVisible()
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['usage-stats'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['playlists'] })
+
+    await goTo(user, 'Mix')
+    expect(await screen.findByRole('heading', { name: 'Saved to Spotify' })).toBeVisible()
+    expect(api.calls.filter((call) => call.url.endsWith('/save'))).toHaveLength(1)
+    expect(warnsBeforeUnload()).toBe(false)
+  })
+
+  it('blocks any new generation while a save is in flight', async () => {
+    const user = userEvent.setup()
+    const save = deferred()
+    const api = stubSpotifyApi({ [SAVE_ROUTE]: () => save.promise })
+    renderApp('/app/mix')
+    await reachMixPreview(user, api)
+    await user.click(screen.getByRole('button', { name: 'Save to Spotify' }))
+
+    await goTo(user, 'Discover')
+    await user.type(await screen.findByRole('combobox'), 'sade')
+    await user.click(
+      (await screen.findByRole('option', { name: 'Sade' })).firstElementChild!,
+    )
+
+    expect(screen.getByRole('button', { name: 'Generate preview' })).toBeDisabled()
+    expect(
+      screen.getByText('Wait for your Mix to finish before creating another playlist.'),
+    ).toBeVisible()
+    expect(generationCalls(api.calls)).toHaveLength(1)
+    save.resolve(jsonResponse(previewState(publishedDestination)))
+  })
+
+  it('stores only a reference to the preview, never its tracks or any credential', async () => {
+    const user = userEvent.setup()
+    const api = stubSpotifyApi()
+    renderApp('/app/mix')
+    await reachMixPreview(user, api)
+
+    const stored = JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? 'null')
+    expect(Object.keys(stored).sort()).toEqual([
+      'coverOption',
+      'expiresAt',
+      'feature',
+      'previewId',
+      'request',
+      'saveAttempted',
+      'title',
+      'version',
+    ])
+    expect(sessionStorage.getItem(STORAGE_KEY)).not.toContain('So What')
+  })
+
+  it('restores an unsaved preview after a reload with its title draft, then saves it once', async () => {
+    const user = userEvent.setup()
+    const first = stubSpotifyApi()
+    const view = renderApp('/app/mix')
+    await reachMixPreview(user, first)
+    await user.click(screen.getByRole('button', { name: 'Edit title' }))
+    const input = screen.getByRole('textbox', { name: 'Playlist title' })
+    await user.clear(input)
+    await user.type(input, 'After reload')
+    await user.click(screen.getByRole('button', { name: 'Done' }))
+    view.unmount()
+    usePlaylistRunStore.getState().discard()
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? '{}'), title: 'After reload' }),
+    )
+
+    const second = stubSpotifyApi({
+      [STATE_ROUTE]: () => jsonResponse(previewState(null)),
+      [SAVE_ROUTE]: () => jsonResponse(previewState(publishedDestination)),
+    })
+    renderApp('/app/mix')
+
+    expect(await screen.findByRole('heading', { name: 'After reload' })).toBeVisible()
+    expect(generationCalls(second.calls)).toHaveLength(0)
+    await user.click(screen.getByRole('button', { name: 'Save to Spotify' }))
+    await screen.findByRole('heading', { name: 'Saved to Spotify' })
+    const saves = second.calls.filter((call) => call.url.endsWith('/save'))
+    expect(saves).toHaveLength(1)
+    expect(saves[0].body).toMatchObject({ name: 'After reload' })
+  })
+
+  it('reconciles a publication that was running when the page reloaded without posting again', async () => {
+    const user = userEvent.setup()
+    const first = stubSpotifyApi()
+    const view = renderApp('/app/mix')
+    await reachMixPreview(user, first)
+    view.unmount()
+    usePlaylistRunStore.getState().discard()
+
+    let reads = 0
+    const second = stubSpotifyApi({
+      [STATE_ROUTE]: () => {
+        reads += 1
+        return jsonResponse(
+          previewState(reads === 1 ? { status: 'publishing' } : publishedDestination),
+        )
+      },
+    })
+    renderApp('/app/mix')
+
+    expect(
+      (await screen.findAllByText('Confirming whether the playlist was saved to Spotify…'))
+        .length,
+    ).toBeGreaterThan(0)
+    expect(await screen.findByRole('heading', { name: 'Saved to Spotify' }, { timeout: 4_000 })).toBeVisible()
+    expect(second.calls.filter((call) => call.method === 'POST')).toHaveLength(0)
+  })
+
+  it('shows the retained outcome after a reload even though the preview content expired', async () => {
+    const user = userEvent.setup()
+    const first = stubSpotifyApi()
+    const view = renderApp('/app/mix')
+    await reachMixPreview(user, first)
+    view.unmount()
+    usePlaylistRunStore.getState().discard()
+
+    stubSpotifyApi({
+      [STATE_ROUTE]: () =>
+        jsonResponse(previewState(publishedDestination, { playlist: null })),
+    })
+    renderApp('/app/mix')
+
+    expect(await screen.findByRole('heading', { name: 'Saved to Spotify' })).toBeVisible()
+    expect(screen.getByRole('link', { name: /Open in Spotify/ })).toBeVisible()
+    expect(screen.queryByRole('list', { name: 'Songs in this playlist' })).toBeNull()
+  })
+
+  it('warns that a save may have happened when a reload finds the preview gone after a recorded attempt', async () => {
+    const user = userEvent.setup()
+    const first = stubSpotifyApi()
+    const view = renderApp('/app/mix')
+    await reachMixPreview(user, first)
+    view.unmount()
+    usePlaylistRunStore.getState().discard()
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        ...JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? '{}'),
+        expiresAt: '2020-01-01T00:00:00.000Z',
+        saveAttempted: true,
+      }),
+    )
+
+    stubSpotifyApi({
+      [STATE_ROUTE]: () =>
+        jsonResponse({ statusCode: 404, code: 'PREVIEW_NOT_FOUND', message: 'gone' }, 404),
+    })
+    renderApp('/app/mix')
+
+    expect(
+      await screen.findByRole('heading', { name: 'This preview is no longer available' }),
+    ).toBeVisible()
+    expect(screen.getAllByText(/check your playlists in Spotify/).length).toBeGreaterThan(0)
+    expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull()
+  })
+
+  it('clears the reference and the preview when the listener logs out', async () => {
+    const user = userEvent.setup()
+    const api = stubSpotifyApi({ 'POST /api/auth/logout': () => jsonResponse({ ok: true }) })
+    renderApp('/app/mix')
+    await reachMixPreview(user, api)
+
+    await user.click(screen.getByRole('button', { name: 'Account menu: Camila' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Log out' }))
+
+    await screen.findByRole('heading', { name: 'What do you want to create?' })
+    expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull()
+    expect(usePlaylistRunStore.getState().run).toBeNull()
+  })
+
+  it('asks before another feature replaces an unsaved preview and keeps it when cancelled', async () => {
+    const user = userEvent.setup()
+    const api = stubSpotifyApi()
+    renderApp('/app/mix')
+    await reachMixPreview(user, api)
+
+    await goTo(user, 'Discover')
+    await user.type(await screen.findByRole('combobox'), 'sade')
+    await user.click(
+      (await screen.findByRole('option', { name: 'Sade' })).firstElementChild!,
+    )
+    await user.click(screen.getByRole('button', { name: 'Generate preview' }))
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Replace the unsaved preview?',
+    })
+    expect(dialog).toBeVisible()
+    expect(generationCalls(api.calls)).toHaveLength(1)
+
+    await user.click(within(dialog).getByRole('button', { name: 'Keep preview' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(generationCalls(api.calls)).toHaveLength(1)
+    await goTo(user, 'Mix')
+    expect(await screen.findByText('Preview · not saved yet')).toBeVisible()
+  })
+
+  it('replaces the unsaved preview once the other feature is confirmed', async () => {
+    const user = userEvent.setup()
+    const api = stubSpotifyApi()
+    renderApp('/app/mix')
+    await reachMixPreview(user, api)
+
+    await goTo(user, 'Discover')
+    await user.type(await screen.findByRole('combobox'), 'sade')
+    await user.click(
+      (await screen.findByRole('option', { name: 'Sade' })).firstElementChild!,
+    )
+    await user.click(screen.getByRole('button', { name: 'Generate preview' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Replace preview' }),
+    )
+
+    await screen.findByText('Generating your preview')
+    expect(generationCalls(api.calls)).toHaveLength(2)
+    expect(usePlaylistRunStore.getState().run?.spec.feature).toBe('discover')
+  })
+
+  it('does not ask when navigating between pages with an unsaved preview', async () => {
+    const user = userEvent.setup()
+    const api = stubSpotifyApi()
+    renderApp('/app/mix')
+    await reachMixPreview(user, api)
+
+    await goTo(user, 'Library')
+    await goTo(user, 'Stats')
+    await goTo(user, 'Mix')
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(await screen.findByText('Preview · not saved yet')).toBeVisible()
+  })
+
+  it('keeps the previous preview when a same-feature regeneration fails', async () => {
+    const user = userEvent.setup()
+    const api = stubSpotifyApi()
+    renderApp('/app/mix')
+    await reachMixPreview(user, api)
+
+    await user.click(screen.getByRole('button', { name: 'Try different settings' }))
+    await user.click(screen.getByRole('button', { name: 'Generate new preview' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    await screen.findByText('Generating your preview')
+    api.streams[1].push({
+      type: 'error',
+      statusCode: 502,
+      code: 'CATALOG_UNAVAILABLE',
+      message: 'Catalog unavailable',
+    })
+    api.streams[1].close()
+
+    expect(await screen.findByText('Preview · not saved yet')).toBeVisible()
+    expect(
+      screen.getByText('Couldn’t generate a new preview. This one is still available.'),
+    ).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Save to Spotify' })).toBeEnabled()
   })
 })

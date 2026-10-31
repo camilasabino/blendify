@@ -16,7 +16,10 @@ import {
 } from '@/test/app-harness'
 import {
   guestJazzPlaylist as guestPlaylist,
-  spotifyJazzPlaylist as spotifyPlaylist,
+  jazzPreview,
+  PREVIEW_ID,
+  previewState,
+  publishedDestination,
 } from '@/test/playlist-fixtures'
 
 vi.mock('@/lib/playlist-cover', () => ({
@@ -37,8 +40,10 @@ function stubGeneration() {
       jsonResponse({ genres: [{ id: 'jazz', name: 'Jazz' }] }),
     'POST /api/generate/mix': () =>
       ndjsonResponse(progress, { type: 'result', playlist: guestPlaylist }),
-    'POST /api/playlists/mix': () =>
-      ndjsonResponse(progress, { type: 'result', playlist: spotifyPlaylist }),
+    'POST /api/previews/mix': () =>
+      ndjsonResponse(progress, { type: 'result', playlist: jazzPreview() }),
+    [`POST /api/previews/${PREVIEW_ID}/save`]: () =>
+      jsonResponse(previewState(publishedDestination)),
     'GET /api/player/devices': () => jsonResponse({ devices: [] }),
   })
 }
@@ -502,67 +507,108 @@ describe('MixPlaylistForm generation modes', () => {
     expect(screen.queryByRole('region', { name: 'Transfer with Soundiiz' })).toBeNull()
   })
 
-  it('creates through the Spotify endpoint with the same form', async () => {
+  it('generates a Spotify preview from the same form without saving anything', async () => {
     setAuthState(testUser)
     const { calls } = stubGeneration()
     renderWithProviders(<MixPlaylistForm />)
 
-    expect(screen.getByRole('heading', { name: 'Size and cover' })).toBeVisible()
-    expect(screen.getByText('Add a cover image')).toBeVisible()
-    await generateJazzMix('Create playlist')
+    expect(screen.getByRole('heading', { name: 'Size' })).toBeVisible()
+    expect(screen.queryByText('Add a cover image')).not.toBeInTheDocument()
+    await generateJazzMix('Generate preview')
 
     const [request] = generationCalls(calls)
-    expect(request.url).toBe('/api/playlists/mix')
-    expect(screen.getByText('Playlist ready')).toBeVisible()
+    expect(request.url).toBe('/api/previews/mix')
+    expect(request.body).toMatchObject({ kind: 'genre_mix', genreIds: ['jazz'] })
+    expect(request.body).not.toHaveProperty('persistToLibrary')
+    expect(request.body).not.toHaveProperty('coverImageBase64')
+    expect(generationCalls(calls)).toHaveLength(1)
+    expect(screen.getByText('Preview · not saved yet')).toBeVisible()
+    expect(screen.getByText(/This preview is temporary and isn’t saved yet/)).toBeVisible()
+    expect(screen.getByText('Add a cover image')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Save to Spotify' })).toBeEnabled()
     expect(
-      screen.getByRole('button', { name: 'Create new playlist', hidden: true }),
+      screen.getByRole('button', { name: 'Generate new preview', hidden: true }),
     ).toBeInTheDocument()
-    expect(request.body).toMatchObject({
-      kind: 'genre_mix',
-      genreIds: ['jazz'],
+    expect(screen.queryByRole('link', { name: 'Open in Spotify' })).toBeNull()
+    expect(renderPlaylistCoverBase64).not.toHaveBeenCalled()
+    const songs = screen.getByRole('list', { name: 'Songs in this playlist' })
+    expect(within(songs).getByText('So What')).toBeVisible()
+  })
+
+  it('saves exactly once with the edited title, however many times Save is activated', async () => {
+    setAuthState(testUser)
+    const { calls } = stubGeneration()
+    renderWithProviders(<MixPlaylistForm />)
+    const user = userEvent.setup()
+    await generateJazzMix('Generate preview')
+
+    await user.click(screen.getByRole('button', { name: 'Edit title' }))
+    const input = screen.getByRole('textbox', { name: 'Playlist title' })
+    await user.clear(input)
+    await user.type(input, 'Late night jazz')
+    await user.click(screen.getByRole('button', { name: 'Done' }))
+
+    const save = screen.getByRole('button', { name: 'Save to Spotify' })
+    await user.dblClick(save)
+    await user.keyboard('{Enter}')
+    await screen.findByRole('heading', { name: 'Saved to Spotify' })
+
+    const saves = calls.filter((call) => call.url.endsWith('/save'))
+    expect(saves).toHaveLength(1)
+    expect(saves[0].body).toEqual({
+      name: 'Late night jazz',
       persistToLibrary: true,
       coverImageBase64: 'cover-data',
     })
     expect(renderPlaylistCoverBase64).toHaveBeenCalledWith({
-      title: 'Blendify · Mix · Jazz',
+      title: 'Late night jazz',
       kind: 'mix',
     })
-    expect(screen.getByRole('link', { name: 'Open in Spotify' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Open in Spotify/ })).toHaveAttribute(
       'href',
-      spotifyPlaylist.spotifyUrl,
+      publishedDestination.spotifyUrl,
     )
-    expect(screen.queryByText(/This playlist is temporary/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Save to Spotify' })).toBeNull()
+    expect(screen.queryByText(/This preview is temporary/)).toBeNull()
+  })
+
+  it('disables Save with a reason while the title is empty', async () => {
+    setAuthState(testUser)
+    stubGeneration()
+    renderWithProviders(<MixPlaylistForm />)
+    const user = userEvent.setup()
+    await generateJazzMix('Generate preview')
+
+    await user.click(screen.getByRole('button', { name: 'Edit title' }))
+    await user.clear(screen.getByRole('textbox', { name: 'Playlist title' }))
+
+    expect(screen.getByRole('button', { name: 'Save to Spotify' })).toBeDisabled()
+    expect(screen.getByText('Add a title to save this playlist.')).toBeVisible()
   })
 })
 
-describe('MixPlaylistForm after an unconfirmed Spotify creation', () => {
-  const outcomeUnknown = {
-    type: 'error',
-    statusCode: 502,
-    code: 'SPOTIFY_OUTCOME_UNKNOWN',
-    message: 'Spotify did not confirm the result of this change.',
-    details: { operation: 'createPlaylist', category: 'upstream_error', status: 502 },
-  }
-
+describe('MixPlaylistForm after an interrupted Spotify generation', () => {
   beforeEach(() => {
     usePlaylistRunStore.getState().discard()
   })
 
-  async function reachUnconfirmedCreation(
-    firstReply: () => Response | Promise<Response> = () =>
-      ndjsonResponse(progress, outcomeUnknown),
-    heading = 'Couldn’t confirm the playlist',
-  ) {
+  it.each([
+    [
+      'the stream ends without a result',
+      () => ndjsonResponse(progress),
+    ],
+    ['the connection drops', () => Promise.reject(new TypeError('network error'))],
+  ])('offers a plain retry when %s because generation writes nothing', async (_label, firstReply) => {
     setAuthState(testUser)
-    let creations = 0
+    let attempts = 0
     const api = stubApi({
-      'GET /api/genres': () =>
-        jsonResponse({ genres: [{ id: 'jazz', name: 'Jazz' }] }),
-      'POST /api/playlists/mix': () => {
-        creations += 1
-        return creations === 1
+      'GET /api/genres': () => jsonResponse({ genres: [{ id: 'jazz', name: 'Jazz' }] }),
+      'POST /api/previews/mix': () => {
+        attempts += 1
+        return attempts === 1
           ? firstReply()
-          : ndjsonResponse(progress, { type: 'result', playlist: spotifyPlaylist })
+          : ndjsonResponse(progress, { type: 'result', playlist: jazzPreview() })
       },
       'GET /api/player/devices': () => jsonResponse({ devices: [] }),
     })
@@ -570,110 +616,17 @@ describe('MixPlaylistForm after an unconfirmed Spotify creation', () => {
     renderWithProviders(<MixPlaylistForm />)
     await user.click(screen.getByRole('radio', { name: 'Genres' }))
     await user.click(await screen.findByRole('button', { name: /Jazz/ }))
-    await user.click(screen.getByRole('button', { name: 'Create playlist' }))
-    await screen.findByRole('heading', { name: heading })
-    return { user, calls: api.calls }
-  }
+    await user.click(screen.getByRole('button', { name: 'Generate preview' }))
+    await screen.findByRole('heading', { name: 'Couldn’t create the playlist' })
 
-  it('does not repeat the creation from the usual button, Enter, or a direct form submit', async () => {
-    const { user, calls } = await reachUnconfirmedCreation()
-
-    const submit = screen.getByRole('button', { name: 'Create playlist' })
-    expect(submit).toBeDisabled()
-    expect(submit).toHaveAccessibleDescription(
-      'Check Spotify first. To create another playlist, use “Create a new playlist anyway” above.',
-    )
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Spotify didn’t confirm whether the playlist was created',
-    )
-    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
-
-    await user.click(submit)
-    await user.click(screen.getByRole('radio', { name: 'Genres' }))
-    await user.keyboard('{Enter}')
-    fireEvent.submit(submit.closest('form')!)
-    await new Promise((resolve) => setTimeout(resolve, 50))
-
-    expect(generationCalls(calls)).toHaveLength(1)
-    expect(screen.getAllByRole('button', { name: /Jazz/ }).length).toBeGreaterThan(0)
-  })
-
-  it('creates another playlist only through the explicit action, with the same input', async () => {
-    const { user, calls } = await reachUnconfirmedCreation()
-
-    const createNew = screen.getByRole('button', { name: 'Create a new playlist anyway' })
-    expect(createNew).toHaveAccessibleDescription(
-      'This sends the same request again as a separate playlist. If the previous one was created, you’ll have both in Spotify.',
-    )
-    await user.click(createNew)
-    await screen.findByRole('heading', { name: 'Blendify · Mix · Jazz' })
-
-    const creations = generationCalls(calls)
-    expect(creations).toHaveLength(2)
-    expect(creations[1].body).toEqual(creations[0].body)
-  })
-
-  it('offers the explicit action to keyboard users', async () => {
-    const { user, calls } = await reachUnconfirmedCreation()
-
-    screen.getByRole('button', { name: 'Create a new playlist anyway' }).focus()
-    await user.keyboard('{Enter}')
-    await screen.findByRole('heading', { name: 'Blendify · Mix · Jazz' })
-
-    expect(generationCalls(calls)).toHaveLength(2)
-  })
-
-  it.each([
-    [
-      'the stream ends after the write without a result',
-      () => ndjsonResponse(progress, { ...progress, phase: 'publishing', percent: 95 }),
-    ],
-    ['the connection drops', () => Promise.reject(new TypeError('network error'))],
-  ])('guards the creation the same way when %s', async (_label, firstReply) => {
-    const { user, calls } = await reachUnconfirmedCreation(firstReply, 'Lost connection')
-
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Blendify lost the connection before it could confirm the result.',
-    )
-    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
-    expect(screen.getByRole('link', { name: 'Open Library' })).toBeVisible()
-    const submit = screen.getByRole('button', { name: 'Create playlist' })
-    expect(submit).toBeDisabled()
-    await user.click(submit)
-    await user.click(screen.getByRole('radio', { name: 'Genres' }))
-    await user.keyboard('{Enter}')
-    fireEvent.submit(submit.closest('form')!)
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(generationCalls(calls)).toHaveLength(1)
-
-    await user.click(screen.getByRole('button', { name: 'Create a new playlist anyway' }))
-    await screen.findByRole('heading', { name: 'Blendify · Mix · Jazz' })
-
-    const creations = generationCalls(calls)
-    expect(creations).toHaveLength(2)
-    expect(creations[1].body).toEqual(creations[0].body)
-  })
-
-  it('keeps the safe retry when the failure proves the creation was never sent', async () => {
-    const { user, calls } = await reachUnconfirmedCreation(
-      () =>
-        ndjsonResponse(progress, {
-          type: 'error',
-          statusCode: 503,
-          code: 'SPOTIFY_UNAVAILABLE',
-          message: 'unavailable',
-          details: { operation: 'createPlaylist', category: 'network', status: null },
-        }),
-      'Couldn’t create the playlist',
-    )
-
-    expect(screen.getByRole('button', { name: 'Create playlist' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Generate preview' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: 'Create a new playlist anyway' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Try again' }))
-    await screen.findByRole('heading', { name: 'Blendify · Mix · Jazz' })
+    await screen.findByText('Preview · not saved yet')
 
-    const creations = generationCalls(calls)
+    const creations = generationCalls(api.calls)
     expect(creations).toHaveLength(2)
     expect(creations[1].body).toEqual(creations[0].body)
+    expect(api.calls.some((call) => call.url.endsWith('/save'))).toBe(false)
   })
 })

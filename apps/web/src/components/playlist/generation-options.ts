@@ -20,6 +20,7 @@ import type { useT } from '@/i18n/use-t'
 import type { AppMode } from '@/lib/capabilities'
 import type { GenerationOutcome } from '@/lib/playlist-generation'
 import { formatSongCount } from '@/lib/song-count'
+import { isUnsavedSave, type SpotifySession } from '@/stores/playlist-run-store'
 
 export type GenerationOption<T extends string> = {
   value: T
@@ -153,14 +154,21 @@ export function buildRecipeSummary(
 
 export function recreateNote(
   result: GenerationOutcome | null,
+  session: SpotifySession | null,
   t: ReturnType<typeof useT>,
 ): string | null {
   if (!result) {
     return null
   }
-  return result.mode === 'spotify'
-    ? t('create.recreateNote')
-    : t('create.recreateNoteGuest')
+  if (result.mode === 'guest') {
+    return t('create.recreateNoteGuest')
+  }
+  if (!session || session.save.phase === 'expired') {
+    return null
+  }
+  return isUnsavedSave(session.save)
+    ? t('spotifyPreview.recreateNote')
+    : t('create.recreateNote')
 }
 
 export type GenerationFormCopy = {
@@ -188,11 +196,11 @@ export function generationFormCopy(
     }
   }
   return {
-    detailsTitle: 'create.stepDetails',
-    generate: kind === 'mix' ? 'create.generate' : 'discover.generate',
-    generating: kind === 'mix' ? 'create.generating' : 'discover.generating',
-    generateNew: 'create.generateNew',
-    workingTitle: kind === 'mix' ? 'create.working' : 'discover.working',
+    detailsTitle: 'create.stepSize',
+    generate: 'spotifyPreview.generate',
+    generating: 'spotifyPreview.generating',
+    generateNew: 'spotifyPreview.generateNew',
+    workingTitle: 'spotifyPreview.working',
     workingHint: kind === 'mix' ? 'create.workingHint' : 'discover.workingHint',
   }
 }

@@ -12,7 +12,7 @@ import { useT } from '@/i18n/use-t'
 import { formatSongCount } from '@/lib/song-count'
 import { formatListeningTime } from '@/lib/utils'
 import { isSpotifyDestination } from './ai-destination-state'
-import { AiPlaylistTitle } from './ai-playlist-title'
+import { PlaylistTitleField } from '@/components/spotify-destination/playlist-title-field'
 import { AiUnmetConstraints } from './ai-unmet-constraints'
 
 type AiGeneratedPlaylistProps = Readonly<{
@@ -74,7 +74,7 @@ export function AiGeneratedPlaylist({
             <CircleCheck aria-hidden className="size-3.5" />
             {t('ai.result.eyebrow')}
           </p>
-          <AiPlaylistTitle
+          <PlaylistTitleField
             titleId={titleId}
             title={title}
             suggestedTitle={suggestedTitle}
@@ -88,7 +88,7 @@ export function AiGeneratedPlaylist({
                 <span className="text-cream-400"> · {requestedDuration}</span>
               ) : null}
             </p>
-          </AiPlaylistTitle>
+          </PlaylistTitleField>
         </div>
       </div>
 

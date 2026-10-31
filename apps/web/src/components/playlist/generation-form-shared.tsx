@@ -107,11 +107,13 @@ export function CoverToggle({
   checked,
   onCheckedChange,
   hint,
+  disabled = false,
 }: Readonly<{
   id: string
   checked: boolean
   onCheckedChange: (checked: boolean) => void
   hint: string
+  disabled?: boolean
 }>) {
   const t = useT()
   const hintId = `${id}-hint`
@@ -127,6 +129,7 @@ export function CoverToggle({
         id={id}
         checked={checked}
         onCheckedChange={onCheckedChange}
+        disabled={disabled}
         aria-describedby={hintId}
       />
     </div>

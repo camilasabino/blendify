@@ -3,24 +3,32 @@ import {
   type GenerateDiscoverRequest,
   type GenerateMixRequest,
   type GeneratedPlaylistDto,
-  type PublishedPlaylist,
 } from '@/lib/api'
+import type { SpotifyPreviewPlaylistDto } from '@blendify/contracts'
 import type { AppMode } from '@/lib/capabilities'
 import type { GenerationProgressHandler } from '@/lib/generation-stream'
 
-export type GenerationOutcome =
-  | { mode: 'spotify'; playlist: PublishedPlaylist }
-  | { mode: 'guest'; playlist: GeneratedPlaylistDto }
-
-export type SpotifyPublication = {
-  coverImageBase64?: string
-  persistToLibrary: boolean
+export type SpotifyPreviewResult = {
+  previewId: string
+  expiresAt: string
+  playlist: SpotifyPreviewPlaylistDto | null
 }
+
+export type SpotifyGenerationOutcome = {
+  mode: 'spotify'
+  preview: SpotifyPreviewResult
+}
+
+export type GuestGenerationOutcome = {
+  mode: 'guest'
+  playlist: GeneratedPlaylistDto
+}
+
+export type GenerationOutcome = SpotifyGenerationOutcome | GuestGenerationOutcome
 
 export type GenerationRun<TRequest> = {
   mode: AppMode
   request: TRequest
-  publication: SpotifyPublication
   onProgress?: GenerationProgressHandler
   signal?: AbortSignal
 }
@@ -28,16 +36,12 @@ export type GenerationRun<TRequest> = {
 export async function runMixGeneration({
   mode,
   request,
-  publication,
   onProgress,
   signal,
 }: GenerationRun<GenerateMixRequest>): Promise<GenerationOutcome> {
   if (mode === 'spotify') {
-    const playlist = await api.createMix(
-      { ...request, ...publication },
-      { onProgress, signal },
-    )
-    return { mode, playlist }
+    const preview = await api.createMixPreview(request, { onProgress, signal })
+    return { mode, preview }
   }
   const playlist = await api.generateMix(request, { onProgress, signal })
   return { mode, playlist }
@@ -46,39 +50,40 @@ export async function runMixGeneration({
 export async function runDiscoverGeneration({
   mode,
   request,
-  publication,
   onProgress,
   signal,
 }: GenerationRun<GenerateDiscoverRequest>): Promise<GenerationOutcome> {
   if (mode === 'spotify') {
-    const playlist = await api.createDiscover(
-      { ...request, ...publication },
-      { onProgress, signal },
-    )
-    return { mode, playlist }
+    const preview = await api.createDiscoverPreview(request, { onProgress, signal })
+    return { mode, preview }
   }
   const playlist = await api.generateDiscover(request, { onProgress, signal })
   return { mode, playlist }
 }
 
+export function outcomePlaylist(
+  outcome: GenerationOutcome,
+): GeneratedPlaylistDto | SpotifyPreviewPlaylistDto | null {
+  return outcome.mode === 'spotify' ? outcome.preview.playlist : outcome.playlist
+}
+
 export function outcomeTrackCount(outcome: GenerationOutcome): number {
-  return outcome.mode === 'spotify'
-    ? outcome.playlist.trackCount
-    : outcome.playlist.tracks.length
+  return outcomePlaylist(outcome)?.tracks.length ?? 0
 }
 
 export function outcomeDurationMs(outcome: GenerationOutcome): number {
-  if (outcome.mode === 'spotify') {
-    return outcome.playlist.totalDurationMs
+  const playlist = outcomePlaylist(outcome)
+  if (!playlist) {
+    return 0
   }
-  return outcome.playlist.tracks.reduce(
-    (total, track) => total + track.durationMs,
-    0,
-  )
+  return playlist.tracks.reduce((total, track) => total + track.durationMs, 0)
 }
 
 export function outcomeRequestedTrackCount(outcome: GenerationOutcome): number {
-  const { generation } = outcome.playlist
+  const generation = outcomePlaylist(outcome)?.generation
+  if (!generation) {
+    return 0
+  }
   if (generation.kind === 'artist_mix' || generation.kind === 'genre_mix') {
     return generation.tracksPerSeed * generation.seeds.length
   }

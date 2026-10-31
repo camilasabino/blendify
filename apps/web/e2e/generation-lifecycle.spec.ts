@@ -6,7 +6,7 @@ import {
   mockGenerationStream,
   mockGenres,
 } from './fixtures/api-mocks'
-import { generationProgress, spotifyJazzPlaylist } from './fixtures/playlists'
+import { generationProgress, jazzPreview } from './fixtures/playlists'
 
 test.describe('Spotify generation across navigation', () => {
   test.beforeEach(async ({ page }) => {
@@ -18,13 +18,13 @@ test.describe('Spotify generation across navigation', () => {
   test('keeps a running Mix visible in the shell, finishes once, and restores the result on Mix', async ({
     page,
   }) => {
-    const generation = mockGenerationStream(page, '**/api/playlists/mix', [
+    const generation = mockGenerationStream(page, '**/api/previews/mix', [
       generationProgress,
-      { type: 'result', playlist: spotifyJazzPlaylist },
+      { type: 'result', playlist: jazzPreview() },
     ])
     const generationRequests: string[] = []
     page.on('request', (request) => {
-      if (request.url().includes('/api/playlists/mix')) {
+      if (request.url().includes('/api/previews/mix')) {
         generationRequests.push(redactQaUrl(request.url()))
       }
     })
@@ -35,8 +35,8 @@ test.describe('Spotify generation across navigation', () => {
       .getByText('Genres', { exact: true })
       .click()
     await page.getByRole('button', { name: /Jazz/ }).click()
-    await page.getByRole('button', { name: 'Create playlist' }).click()
-    await expect(page.getByText('Creating your playlist')).toBeVisible()
+    await page.getByRole('button', { name: 'Generate preview' }).click()
+    await expect(page.getByText('Generating your preview')).toBeVisible()
 
     await page
       .getByRole('navigation', { name: 'Main menu' })
@@ -50,9 +50,9 @@ test.describe('Spotify generation across navigation', () => {
     await expect(status.getByRole('link', { name: 'View progress' })).toBeVisible()
 
     generation.release()
-    await expect(status.getByText('Your Mix is ready')).toBeVisible()
+    await expect(status.getByText('Your Mix preview is ready · not saved')).toBeVisible()
 
-    await status.getByRole('link', { name: 'View playlist' }).click()
+    await status.getByRole('link', { name: 'View preview' }).click()
     await expect(page).toHaveURL(/\/app\/mix$/)
     await expect(
       page.getByRole('heading', { name: 'Blendify · Mix · Jazz' }),
@@ -76,13 +76,10 @@ test.describe('Spotify generation across navigation', () => {
     expect(generationRequests).toHaveLength(1)
   })
 
-  test('does not recover a finished generation after a page refresh', async ({
+  test('does not recover a generation that was still running when the page was refreshed', async ({
     page,
   }) => {
-    const generation = mockGenerationStream(page, '**/api/playlists/mix', [
-      generationProgress,
-      { type: 'result', playlist: spotifyJazzPlaylist },
-    ])
+    mockGenerationStream(page, '**/api/previews/mix', [])
 
     await page.goto('/app/mix')
     await page
@@ -90,19 +87,13 @@ test.describe('Spotify generation across navigation', () => {
       .getByText('Genres', { exact: true })
       .click()
     await page.getByRole('button', { name: /Jazz/ }).click()
-    await page.getByRole('button', { name: 'Create playlist' }).click()
-    await expect(page.getByText('Creating your playlist')).toBeVisible()
-    generation.release()
-    await expect(
-      page.getByRole('heading', { name: 'Blendify · Mix · Jazz' }),
-    ).toBeVisible()
+    await page.getByRole('button', { name: 'Generate preview' }).click()
+    await expect(page.getByText('Generating your preview')).toBeVisible()
 
     await page.reload()
 
     await expect(page.getByRole('heading', { name: 'Create your mix' })).toBeVisible()
-    await expect(
-      page.getByRole('heading', { name: 'Blendify · Mix · Jazz' }),
-    ).toHaveCount(0)
+    await expect(page.getByText('Preview · not saved yet')).toHaveCount(0)
     await expect(page.getByRole('region', { name: 'Playlist creation' })).toHaveCount(0)
   })
 })

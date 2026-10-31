@@ -66,9 +66,6 @@ export const en = {
   'discover.needArtist': 'Choose an artist to continue.',
   'discover.needTrack': 'Choose a song to continue.',
   'discover.removeTrack': 'Remove {name}',
-  'discover.generate': 'Create playlist',
-  'discover.generating': 'Creating…',
-  'discover.working': 'Creating your playlist',
   'discover.workingHint': 'Finding related songs for your playlist…',
   'discover.failed': 'Couldn’t create the playlist. Please try again.',
   'discover.noTracksFound':
@@ -82,7 +79,6 @@ export const en = {
   'create.modeArtists': 'Artists',
   'create.modeGenres': 'Genres',
   'create.stepSource': 'Artists or genres',
-  'create.stepDetails': 'Size and cover',
   'create.generateCover': 'Add a cover image',
   'create.coverFailed': 'Couldn’t add the cover.',
   'create.artists': 'Artists',
@@ -160,9 +156,6 @@ export const en = {
   'create.removeArtist': 'Remove {name}',
   'create.failed': 'Couldn’t create the playlist. Please try again.',
   'create.failedTitle': 'Couldn’t create the playlist',
-  'create.generating': 'Creating…',
-  'create.generate': 'Create playlist',
-  'create.working': 'Creating your playlist',
   'create.ready': 'Playlist ready',
   'create.createAnother': 'Create another',
   'create.adjustAndRecreate': 'Try different settings',
@@ -179,7 +172,6 @@ export const en = {
     'Still going — thanks for your patience…',
   'create.progressResolving': 'Preparing your selection',
   'create.progressMatching': 'Finding songs',
-  'create.progressPublishing': 'Creating the playlist in Spotify',
   'create.progressCount': '{current} of {total} songs',
   'create.nearCompleteTracks':
     'Added {count} of {requested} songs — almost the full amount.',
@@ -190,7 +182,6 @@ export const en = {
   'create.openSpotify': 'Open in Spotify',
   'create.copyLink': 'Copy link',
   'create.copied': 'Copied',
-  'create.linkPending': 'The Spotify link will appear once your playlist is ready.',
   'preview.player': 'Playlist preview',
   'preview.modeLabel': 'Listen',
   'preview.modeHere': 'Listen here',
@@ -403,11 +394,6 @@ export const en = {
   'create.addSuggestion': 'Add {name}',
   'create.recreateNote':
     'Changing these settings creates a new playlist. The one you just made stays on Spotify.',
-  'create.generateNew': 'Create new playlist',
-  'create.leaveNoteLibrary':
-    'You can browse other sections while this runs. The playlist will be saved to Spotify and your Library. Keep this tab open: if you refresh or close it, Blendify can no longer show the result.',
-  'create.leaveNoteSpotify':
-    'You can browse other sections while this runs. The playlist will be saved to Spotify. Keep this tab open: if you refresh or close it, Blendify can no longer show the result.',
   'common.songsOne': '1 song',
   'common.songsMany': '{count} songs',
   'preview.showAll': 'Show all {count} songs',
@@ -539,30 +525,6 @@ export const en = {
     'Spotify couldn’t process this request. Try again later.',
   'errors.spotifyOutcomeUnknown':
     'Spotify didn’t confirm whether the change was made. Check Spotify before trying again.',
-  'errors.spotifyPlaylistIncomplete':
-    'Blendify created the playlist on Spotify but couldn’t finish it. Open it in Spotify to check it.',
-  'create.unconfirmedTitle':
-    'Couldn’t confirm the playlist',
-  'create.unconfirmed':
-    'Spotify didn’t confirm whether the playlist was created. It may already be in your Spotify account, so check your playlists there before creating it again.',
-  'create.createNewAnyway':
-    'Create a new playlist anyway',
-  'create.createNewAnywayHint':
-    'This sends the same request again as a separate playlist. If the previous one was created, you’ll have both in Spotify.',
-  'create.resubmitBlockedUncertain':
-    'Check Spotify first. To create another playlist, use “Create a new playlist anyway” above.',
-  'create.incompleteTitle':
-    'Couldn’t finish the playlist',
-  'create.incompleteNoTracks':
-    'Blendify created the playlist on Spotify, but Spotify didn’t accept its songs. Open it in Spotify to check it.',
-  'create.incompleteUnknownTracks':
-    'Blendify created the playlist on Spotify, but couldn’t confirm whether its songs were added. Open it in Spotify to check it.',
-  'create.incompleteLibrary':
-    'Your playlist is on Spotify with all its songs, but Blendify couldn’t save it to your Library.',
-  'runStatus.unconfirmed.mix':
-    'Couldn’t confirm your Mix',
-  'runStatus.unconfirmed.discover':
-    'Couldn’t confirm your Discover playlist',
   'runStatus.incomplete.mix':
     'Your Mix wasn’t finished',
   'runStatus.incomplete.discover':
@@ -968,10 +930,6 @@ export const en = {
     'Couldn’t create your Mix',
   'runStatus.failed.discover':
     'Couldn’t create your Discover playlist',
-  'runStatus.uncertain.mix':
-    'Lost connection while creating your Mix',
-  'runStatus.uncertain.discover':
-    'Lost connection while creating your Discover playlist',
   'runStatus.busy.mix':
     'Wait for your Mix to finish before creating another playlist.',
   'runStatus.busy.discover':
@@ -984,14 +942,6 @@ export const en = {
     'View details',
   'runStatus.dismiss':
     'Close',
-  'create.uncertainTitle':
-    'Lost connection',
-  'create.uncertainLibrary':
-    'Blendify lost the connection before it could confirm the result. The playlist may already exist, so check your Library or Spotify before creating it again.',
-  'create.uncertainSpotify':
-    'Blendify lost the connection before it could confirm the result. The playlist may already exist, so check Spotify before creating it again.',
-  'create.openLibrary':
-    'Open Library',
   'home.eyebrow': 'Home',
   'home.title': 'What do you want to create?',
   'home.subtitle':
@@ -1006,6 +956,90 @@ export const en = {
   'home.connectTitle': 'Want to save playlists straight to Spotify?',
   'home.connectBody':
     'Connect Spotify to save private playlists to your account, keep a Library and see your stats. The options above work without connecting.',
+  'spotifyPreview.generate':
+    'Generate preview',
+  'spotifyPreview.generating':
+    'Generating…',
+  'spotifyPreview.generateNew':
+    'Generate new preview',
+  'spotifyPreview.working':
+    'Generating your preview',
+  'spotifyPreview.leaveNote':
+    'You can browse other sections while this runs. Nothing is saved to Spotify until you choose Save to Spotify. Keep this tab open until the preview is ready.',
+  'spotifyPreview.eyebrow':
+    'Preview · not saved yet',
+  'spotifyPreview.temporary':
+    'This preview is temporary and isn’t saved yet. Nothing reaches Spotify until you choose Save to Spotify, and the preview expires after about 30 minutes.',
+  'spotifyPreview.readyAnnouncement':
+    'Preview ready, not saved yet',
+  'spotifyPreview.titleRequired':
+    'Add a title to save this playlist.',
+  'spotifyPreview.recreateNote':
+    'Changing these settings creates a new preview. This one stays here until the new one is ready.',
+  'spotifyPreview.confirming':
+    'Confirming whether the playlist was saved to Spotify…',
+  'spotifyPreview.confirmingShort':
+    'Confirming…',
+  'spotifyPreview.confirmingPaused':
+    'Blendify hasn’t been able to confirm the save yet. Check the status again, and don’t save it again until you know the result.',
+  'spotifyPreview.checkStatus':
+    'Check status',
+  'spotifyPreview.expiredTitle':
+    'This preview expired',
+  'spotifyPreview.expired':
+    'Previews are kept for about 30 minutes and this one is gone. You can generate it again with the same settings, but the songs may be different.',
+  'spotifyPreview.unavailableTitle':
+    'This preview is no longer available',
+  'spotifyPreview.unavailableMaybeSaved':
+    'Blendify can no longer find this preview or confirm whether it was saved. If you were saving it, check your playlists in Spotify before generating again. A new preview may have different songs.',
+  'spotifyPreview.lost':
+    'Blendify can no longer find this preview. You can generate it again with the same settings, but the songs may be different.',
+  'spotifyPreview.generateAgain':
+    'Generate again',
+  'spotifyPreview.regenerationFailed':
+    'Couldn’t generate a new preview. This one is still available.',
+  'spotifyPreview.replaceTitle':
+    'Replace the unsaved preview?',
+  'spotifyPreview.replaceBody.mix':
+    'Your Mix preview isn’t saved to Spotify. Generating this playlist will discard it.',
+  'spotifyPreview.replaceBody.discover':
+    'Your Discover preview isn’t saved to Spotify. Generating this playlist will discard it.',
+  'spotifyPreview.replaceConfirm':
+    'Replace preview',
+  'spotifyPreview.replaceCancel':
+    'Keep preview',
+  'spotifySave.reason.outcomeUnknown':
+    'Spotify didn’t confirm whether the playlist was created, so it may exist in your account. Check Spotify. Blendify won’t try to save it again from here.',
+  'spotifySave.reason.tracksIncomplete':
+    'The playlist exists on Spotify, but some songs may be missing. Open it in Spotify to check which songs were added.',
+  'spotifySave.reason.libraryNotSaved':
+    'The playlist is on Spotify with all its songs, but Blendify couldn’t add it to your Library.',
+  'spotifySave.reason.interrupted':
+    'Saving was interrupted before Blendify could confirm it. The playlist may exist in your Spotify account, so check there before generating again.',
+  'errors.clientOutdated':
+    'This version of Blendify is out of date. Reload the page to continue.',
+  'runStatus.preview.mix':
+    'Your Mix preview is ready · not saved',
+  'runStatus.preview.discover':
+    'Your Discover preview is ready · not saved',
+  'runStatus.saving.mix':
+    'Saving your Mix to Spotify',
+  'runStatus.saving.discover':
+    'Saving your Discover playlist to Spotify',
+  'runStatus.confirming.mix':
+    'Confirming your Mix was saved',
+  'runStatus.confirming.discover':
+    'Confirming your Discover playlist was saved',
+  'runStatus.saved.mix':
+    'Your Mix is saved to Spotify',
+  'runStatus.saved.discover':
+    'Your Discover playlist is saved to Spotify',
+  'runStatus.expired.mix':
+    'Your Mix preview expired',
+  'runStatus.expired.discover':
+    'Your Discover preview expired',
+  'runStatus.viewPreview':
+    'View preview',
 } as const
 
 export type MessageKey = keyof typeof en

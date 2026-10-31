@@ -3,10 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Sparkles } from 'lucide-react'
 import { MemoryRouter } from 'react-router-dom'
-import type { GenerationProgress, PlaylistDetail } from '@blendify/contracts'
+import type { GenerationProgress, SpotifyPreviewDto } from '@blendify/contracts'
 import { GenerationResultPanel } from './generation-result-panel'
 import { GenerationSubmitBar } from './generation-form-shared'
-import { guestJazzPlaylist, jazzTrack } from '@/test/playlist-fixtures'
+import { newSpotifySession, type SpotifySession } from '@/stores/playlist-run-store'
+import { guestJazzPlaylist, jazzTrack, PREVIEW_ID } from '@/test/playlist-fixtures'
 
 type PanelProps = Parameters<typeof GenerationResultPanel>[0]
 
@@ -21,14 +22,12 @@ function renderPanel(overrides: Partial<PanelProps> = {}) {
     result: null,
     progress: null,
     failure: null,
-    coverError: null,
     requestedTrackCount: 0,
-    workingTitleKey: 'create.working',
+    workingTitleKey: 'spotifyPreview.working',
     workingHintKey: 'create.workingHint',
     copied: false,
     onCopy: vi.fn(),
     onRetry: vi.fn(),
-    onCreateNew: vi.fn(),
     onAdjust: vi.fn(),
     onCreateAnother: vi.fn(),
     ...overrides,
@@ -50,34 +49,27 @@ function progressPanel(progress: GenerationProgress): PanelProps {
     result: null,
     progress,
     failure: null,
-    coverError: null,
     requestedTrackCount: 10,
-    workingTitleKey: 'create.working',
+    workingTitleKey: 'spotifyPreview.working',
     workingHintKey: 'create.workingHint',
     copied: false,
     onCopy: vi.fn(),
     onRetry: vi.fn(),
-    onCreateNew: vi.fn(),
     onAdjust: vi.fn(),
     onCreateAnother: vi.fn(),
   }
 }
 
-const readyPlaylist: PlaylistDetail = {
-  id: 'playlist-1',
+const guesterPlaylist = {
   name: 'Blendify · Mix · Guster',
   description: '',
-  kind: 'artist_mix',
   seeds: [{ type: 'artist', id: 'artist-1', name: 'Guster' }],
-  seedCount: 1,
-  trackCount: 10,
-  totalDurationMs: 40 * 60_000,
-  spotifyUrl: 'https://open.spotify.com/playlist/playlist-1',
-  status: 'COMPLETED',
-  imageUrl: null,
-  createdAt: '2026-09-23T12:00:00Z',
-  updatedAt: '2026-09-23T12:00:00Z',
-  tracks: [],
+  tracks: Array.from({ length: 10 }, (_, index) => ({
+    ...jazzTrack,
+    id: `track-${index}`,
+    uri: `spotify:track:track-${index}`,
+    durationMs: 4 * 60_000,
+  })),
   generation: {
     version: 1,
     kind: 'artist_mix',
@@ -87,131 +79,58 @@ const readyPlaylist: PlaylistDetail = {
     tracksPerSeed: 10,
     seeds: [{ id: 'artist-1', name: 'Guster' }],
   },
+} satisfies SpotifyPreviewDto['playlist']
+
+const readyOutcome = {
+  mode: 'spotify',
+  preview: { previewId: PREVIEW_ID, expiresAt: '2099-01-01T00:00:00.000Z', playlist: guesterPlaylist },
+} as const
+
+function spotifyBinding(session: Partial<SpotifySession> = {}): NonNullable<PanelProps['spotify']> {
+  return {
+    session: { ...newSpotifySession(guesterPlaylist.name), ...session },
+    actions: {
+      setTitle: vi.fn(),
+      setCoverOption: vi.fn(),
+      save: vi.fn(),
+      checkStatus: vi.fn(),
+    },
+    focusOnArrival: false,
+  }
 }
 
 describe('GenerationResultPanel', () => {
-  it('leads the ready state with the playlist name and natural metadata', () => {
+  it('leads an unsaved Spotify preview with the editable title, natural metadata and a not-saved notice', () => {
     renderPanel({
-      result: { mode: 'spotify', playlist: readyPlaylist },
+      result: readyOutcome,
+      spotify: spotifyBinding(),
       requestedTrackCount: 10,
     })
 
     expect(
       screen.getByRole('heading', { name: 'Blendify · Mix · Guster' }),
     ).toBeVisible()
-    expect(screen.getByText('Playlist ready')).toBeVisible()
+    expect(screen.getByText('Preview · not saved yet')).toBeVisible()
     expect(screen.getByText('10 songs · 40 min')).toBeVisible()
+    expect(screen.getByText(/This preview is temporary and isn’t saved yet/)).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Save to Spotify' })).toBeEnabled()
+    expect(screen.queryByRole('link', { name: /Open in Spotify/ })).toBeNull()
   })
 
-  it('tells people they can browse Blendify but must keep the tab open once the request is running', () => {
+  it('tells people they can browse Blendify while a Spotify preview generates, without promising a save', () => {
     renderPanel({ isGenerating: true, requestStarted: true })
 
     expect(
-      screen.getByText(
-        /You can browse other sections while this runs\. The playlist will be saved to Spotify/,
-      ),
+      screen.getByText(/Nothing is saved to Spotify until you choose Save to Spotify/),
     ).toBeVisible()
-    expect(
-      screen.getByText(/if you refresh or close it, Blendify can no longer show the result/),
-    ).toBeVisible()
-  })
-
-  it('does not offer a retry when the outcome of a Spotify creation is uncertain', () => {
-    renderPanel({
-      failure: {
-        kind: 'connection_lost',
-        message: 'Blendify lost the connection before it could confirm the result.',
-        recovery: 'none',
-        playlistUrl: null,
-        offersNewCreation: true,
-        explainsSpotifyLimit: false,
-      },
-    })
-
-    expect(screen.getByRole('heading', { name: 'Lost connection' })).toBeVisible()
-    expect(screen.getByRole('alert')).toHaveTextContent('lost the connection')
-    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
-    expect(screen.queryByRole('link', { name: 'Open Library' })).toBeNull()
-  })
-
-  it('points to the Library when an uncertain outcome may already be saved there', () => {
-    renderPanel({
-      failure: {
-        kind: 'connection_lost',
-        message: 'Blendify lost the connection before it could confirm the result.',
-        recovery: 'open_library',
-        playlistUrl: null,
-        offersNewCreation: true,
-        explainsSpotifyLimit: false,
-      },
-    })
-
-    expect(screen.getByRole('link', { name: 'Open Library' })).toHaveAttribute(
-      'href',
-      '/app/library',
-    )
-    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
-    expect(
-      screen.getByRole('button', { name: 'Create a new playlist anyway' }),
-    ).toBeVisible()
-  })
-
-  it('offers an unconfirmed Spotify creation only an explicit new creation, never a retry', async () => {
-    const { props } = renderPanel({
-      failure: {
-        kind: 'unconfirmed',
-        message: 'Spotify didn’t confirm whether the playlist was created.',
-        recovery: 'none',
-        playlistUrl: null,
-        offersNewCreation: true,
-        explainsSpotifyLimit: false,
-      },
-    })
-
-    expect(
-      screen.getByRole('heading', { name: 'Couldn’t confirm the playlist' }),
-    ).toBeVisible()
-    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
-    expect(screen.queryByRole('link')).toBeNull()
-    const createNew = screen.getByRole('button', { name: 'Create a new playlist anyway' })
-    expect(createNew).toHaveAccessibleDescription(
-      'This sends the same request again as a separate playlist. If the previous one was created, you’ll have both in Spotify.',
-    )
-    await userEvent.setup().click(createNew)
-    expect(props.onCreateNew).toHaveBeenCalledOnce()
-    expect(props.onRetry).not.toHaveBeenCalled()
-  })
-
-  it('links to the created playlist when Spotify could not finish it', () => {
-    renderPanel({
-      failure: {
-        kind: 'incomplete',
-        message: 'Blendify created the playlist on Spotify, but couldn’t confirm whether its songs were added.',
-        recovery: 'open_playlist',
-        playlistUrl: 'https://open.spotify.com/playlist/created-1',
-        offersNewCreation: false,
-        explainsSpotifyLimit: false,
-      },
-    })
-
-    expect(
-      screen.getByRole('heading', { name: 'Couldn’t finish the playlist' }),
-    ).toBeVisible()
-    expect(screen.getByRole('link', { name: 'Open in Spotify' })).toHaveAttribute(
-      'href',
-      'https://open.spotify.com/playlist/created-1',
-    )
-    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+    expect(screen.queryByText(/will be saved to Spotify/)).toBeNull()
   })
 
   it('keeps Try again visible and adds a collapsed explanation for a Spotify limit', async () => {
     const { props } = renderPanel({
       failure: {
-        kind: 'failed',
         message: 'Spotify is temporarily limiting requests from Blendify. Try again later.',
         recovery: 'retry',
-        playlistUrl: null,
-        offersNewCreation: false,
         explainsSpotifyLimit: true,
       },
     })
@@ -232,11 +151,8 @@ describe('GenerationResultPanel', () => {
   it('offers to connect Spotify again instead of a retry when authorization expired', () => {
     renderPanel({
       failure: {
-        kind: 'failed',
         message: 'Your Spotify connection is no longer valid.',
         recovery: 'reconnect',
-        playlistUrl: null,
-        offersNewCreation: false,
         explainsSpotifyLimit: false,
       },
     })
@@ -271,13 +187,13 @@ describe('GenerationResultPanel', () => {
       'Finding songs, 2 of 10 songs',
     )
     expect(
-      screen.getByRole('region', { name: 'Creating your playlist' }),
+      screen.getByRole('region', { name: 'Generating your preview' }),
     ).not.toHaveAttribute('aria-live')
     expect(screen.getByText('2 of 10 songs', { selector: 'p' })).toBeVisible()
   })
 
-  it('shows preparation and publishing without a counter or an ETA', () => {
-    const { rerender } = render(
+  it('shows preparation without a counter or an ETA', () => {
+    render(
       <MemoryRouter>
         <QueryClientProvider client={new QueryClient()}>
           <GenerationResultPanel
@@ -299,30 +215,6 @@ describe('GenerationResultPanel', () => {
     expect(screen.getByRole('status')).not.toHaveTextContent(/of /)
     expect(screen.getByText('1%')).toBeVisible()
     expect(screen.queryByText(/of 11/)).toBeNull()
-    expect(screen.queryByText(/min remaining/i)).toBeNull()
-
-    rerender(
-      <MemoryRouter>
-        <QueryClientProvider client={new QueryClient()}>
-          <GenerationResultPanel
-            {...progressPanel({
-              phase: 'publishing',
-              current: 0,
-              total: 3,
-              percent: 90,
-              etaSeconds: 40,
-            })}
-          />
-        </QueryClientProvider>
-      </MemoryRouter>,
-    )
-
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Creating the playlist in Spotify',
-    )
-    expect(screen.getByRole('status')).not.toHaveTextContent(/of /)
-    expect(screen.getByText('90%')).toBeVisible()
-    expect(screen.queryByText(/of 3/)).toBeNull()
     expect(screen.queryByText(/min remaining/i)).toBeNull()
   })
 
@@ -399,11 +291,8 @@ describe('GenerationResultPanel', () => {
     const user = userEvent.setup()
     const { props } = renderPanel({
       failure: {
-        kind: 'failed',
         message: 'Spotify is busy right now. Try again in about 2 minutes.',
         recovery: 'retry',
-        playlistUrl: null,
-        offersNewCreation: false,
         explainsSpotifyLimit: false,
       },
     })
@@ -419,9 +308,10 @@ describe('GenerationResultPanel', () => {
     expect(props.onRetry).toHaveBeenCalledOnce()
   })
 
-  it('credits Last.fm once next to the published playlist', () => {
+  it('credits Last.fm once next to the preview', () => {
     renderPanel({
-      result: { mode: 'spotify', playlist: readyPlaylist },
+      result: readyOutcome,
+      spotify: spotifyBinding(),
       requestedTrackCount: 10,
     })
 
@@ -645,11 +535,8 @@ describe('GenerationResultPanel in Guest Mode', () => {
     renderPanel({
       mode: 'guest',
       failure: {
-        kind: 'failed',
         message: 'Something went wrong.',
         recovery: 'retry',
-        playlistUrl: null,
-        offersNewCreation: false,
         explainsSpotifyLimit: false,
       },
     })

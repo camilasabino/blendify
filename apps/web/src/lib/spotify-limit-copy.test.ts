@@ -97,8 +97,7 @@ describe.each(LOCALES)('Spotify limit copy (%s)', (locale) => {
   })
 
   describe('run failure explanation', () => {
-    const view = (error: unknown, uncertain = false) =>
-      runFailureView({ error, isOutcomeUncertain: uncertain }, false, t, 'create.failed')
+    const view = (error: unknown) => runFailureView({ error }, t, 'create.failed')
 
     it.each(['SPOTIFY_RATE_LIMITED', 'SPOTIFY_QUOTA_EXCEEDED'])('explains %s', (code) => {
       expect(view(apiError(429, code))?.explainsSpotifyLimit).toBe(true)
@@ -116,7 +115,7 @@ describe.each(LOCALES)('Spotify limit copy (%s)', (locale) => {
     })
 
     it('does not explain a lost connection', () => {
-      expect(view(new TypeError('network'), true)?.explainsSpotifyLimit).toBe(false)
+      expect(view(new TypeError('network'))?.explainsSpotifyLimit).toBe(false)
     })
   })
 })

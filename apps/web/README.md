@@ -78,8 +78,10 @@ Zod, Tailwind CSS 4, and Zustand.
 
 - **Server state** goes through TanStack Query.
 - **Zustand** holds `stores/playlist-run-store.ts` (the single in-flight or
-  finished Mix/Discover generation, which survives navigation inside the app
-  but not a refresh), `stores/generation-store.ts` (epoch and
+  finished Mix/Discover run, including its Spotify preview and save state, which
+  survives navigation inside the app; a Spotify preview also survives a refresh
+  through the `blendify.spotifyPreview` reference in `sessionStorage`, restored
+  with `GET /api/previews/:previewId`), `stores/generation-store.ts` (epoch and
   `AbortController` for Create with AI) and `stores/auth-store.ts` (current
   user; its migration to TanStack Query is tracked in the code conventions).
 - **Design system**: Tailwind tokens in `src/index.css` (charcoal and amber

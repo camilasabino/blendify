@@ -8,11 +8,14 @@ import { PLAYLIST_RUN_COPY } from '@/components/playlist/playlist-run-copy'
 import { buttonVariants } from '@/components/ui/button'
 import { useT } from '@/i18n/use-t'
 import type { MessageKey } from '@/i18n/messages'
-import { classifyGenerationFailure } from '@/lib/generation-failure'
+import { outcomePlaylist } from '@/lib/playlist-generation'
 import { cn, focusRing } from '@/lib/utils'
 import {
+  isRunBusy,
   usePlaylistRunStore,
   type PlaylistRun,
+  type PlaylistRunFeature,
+  type SpotifySession,
 } from '@/stores/playlist-run-store'
 
 type RunPresentation = {
@@ -20,6 +23,30 @@ type RunPresentation = {
   action: MessageKey
   detail: string | null
   progress: boolean
+  isFailure: boolean
+}
+
+function describeSpotifyRun(
+  session: SpotifySession,
+  copy: (typeof PLAYLIST_RUN_COPY)[PlaylistRunFeature],
+  detail: string | null,
+): RunPresentation {
+  const { save } = session
+  switch (save.phase) {
+    case 'saving':
+      return { title: copy.saving, action: 'runStatus.viewProgress', detail, progress: true, isFailure: false }
+    case 'reconciling':
+      return { title: copy.confirming, action: 'runStatus.viewProgress', detail, progress: true, isFailure: false }
+    case 'settled':
+      return save.destination.status === 'published'
+        ? { title: copy.saved, action: 'runStatus.viewPlaylist', detail, progress: false, isFailure: false }
+        : { title: copy.incomplete, action: 'runStatus.viewDetails', detail, progress: false, isFailure: true }
+    case 'expired':
+      return { title: copy.expired, action: 'runStatus.viewDetails', detail: null, progress: false, isFailure: true }
+    case 'idle':
+    case 'failed':
+      return { title: copy.preview, action: 'runStatus.viewPreview', detail, progress: false, isFailure: false }
+  }
 }
 
 function describeRun(
@@ -38,38 +65,29 @@ function describeRun(
         ? `${t(phaseMessageKey(progress.phase))} · ${progress.percent}%`
         : t(hint),
       progress: true,
+      isFailure: false,
     }
   }
   if (status.phase === 'succeeded') {
+    const detail =
+      status.spotify?.title.trim() || outcomePlaylist(status.outcome)?.name || null
+    if (status.spotify) {
+      return describeSpotifyRun(status.spotify, copy, detail)
+    }
     return {
       title: copy.succeeded,
       action: 'runStatus.viewPlaylist',
-      detail: status.outcome.playlist.name,
+      detail,
       progress: false,
+      isFailure: false,
     }
   }
   return {
-    title: failedRunTitle(copy, status.error, status.phase === 'uncertain'),
+    title: copy.failed,
     action: 'runStatus.viewDetails',
     detail: null,
     progress: false,
-  }
-}
-
-function failedRunTitle(
-  copy: (typeof PLAYLIST_RUN_COPY)[keyof typeof PLAYLIST_RUN_COPY],
-  error: unknown,
-  isOutcomeUncertain: boolean,
-): MessageKey {
-  switch (classifyGenerationFailure(error, isOutcomeUncertain).kind) {
-    case 'connection_lost':
-      return copy.uncertain
-    case 'unconfirmed':
-      return copy.unconfirmed
-    case 'incomplete':
-      return copy.incomplete
-    default:
-      return copy.failed
+    isFailure: true,
   }
 }
 
@@ -77,7 +95,7 @@ function RunStatusCard({ run }: Readonly<{ run: PlaylistRun }>) {
   const t = useT()
   const titleId = useId()
   const { title, action, detail, progress } = describeRun(run, t)
-  const isActive = run.status.phase === 'active'
+  const isBusy = isRunBusy(run)
   const activeProgress = run.status.phase === 'active' ? run.status.progress : null
 
   return (
@@ -94,7 +112,7 @@ function RunStatusCard({ run }: Readonly<{ run: PlaylistRun }>) {
             <p className="break-words text-xs text-cream-300">{detail}</p>
           ) : null}
         </div>
-        {isActive ? null : (
+        {isBusy ? null : (
           <button
             type="button"
             aria-label={t('runStatus.dismiss')}
@@ -129,14 +147,13 @@ function terminalAnnouncement(
   run: PlaylistRun,
   t: ReturnType<typeof useT>,
 ): { message: string; isFailure: boolean } | null {
-  const { status } = run
-  if (status.phase === 'active') {
+  if (isRunBusy(run)) {
     return null
   }
-  const { title, detail } = describeRun(run, t)
+  const { title, detail, isFailure } = describeRun(run, t)
   return {
     message: [t(title), detail].filter(Boolean).join('. '),
-    isFailure: status.phase !== 'succeeded',
+    isFailure,
   }
 }
 
@@ -149,7 +166,7 @@ export function PlaylistRunStatus() {
   const visibleRun =
     run !== null &&
     !isOriginRoute &&
-    (run.status.phase === 'active' || !run.seen)
+    (isRunBusy(run) || !run.seen)
       ? run
       : null
   const announcement = visibleRun ? terminalAnnouncement(visibleRun, t) : null

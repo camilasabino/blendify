@@ -7,9 +7,10 @@ import {
   AiSessionStateSchema,
   GeneratedPlaylistSchema,
   GeneratedPlaylistStreamEventSchema,
-  GenerationStreamEventSchema,
-  PublishedPlaylistSchema,
   PlaylistTransferSchema,
+  SpotifyPreviewSchema,
+  SpotifyPreviewStateSchema,
+  SpotifyPreviewStreamEventSchema,
   type AiGenerationDto,
   type AiRefinementResultDto,
   type CreateAiRefinementRequest,
@@ -21,8 +22,6 @@ import {
   type ArtistDto,
   type BulkLibraryAction,
   type BulkLibraryResult,
-  type CreateDiscoverRequest,
-  type CreateMixRequest,
   type GenerateDiscoverRequest,
   type GenerateMixRequest,
   type GeneratedPlaylistDto,
@@ -33,8 +32,10 @@ import {
   type PlaybackDeviceDto,
   type PlaylistDetail,
   type PlaylistLibraryPage,
-  type PublishedPlaylist,
   type PlaylistTransferDto,
+  type SaveToSpotifyRequest,
+  type SpotifyPreviewDto,
+  type SpotifyPreviewStateDto,
   type StartPlaybackRequest,
   type TrackDto,
   type UserDto,
@@ -70,16 +71,16 @@ export type Genre = GenreDto
 export type {
   BulkLibraryAction,
   BulkLibraryResult,
-  CreateDiscoverRequest,
-  CreateMixRequest,
   GenerateDiscoverRequest,
   GenerateMixRequest,
   GeneratedPlaylistDto,
   GenerationProgress,
   PlaylistDetail,
-  PublishedPlaylist,
   PlaylistLibraryPage,
   PlaylistTransferDto,
+  SaveToSpotifyRequest,
+  SpotifyPreviewDto,
+  SpotifyPreviewStateDto,
   UserUsageStats,
 }
 export type { DiscoverTrackTarget, RankedSeedUsage } from '@blendify/contracts'
@@ -216,9 +217,9 @@ const AI_GENERATION: GenerationContract<AiGeneration> = {
   result: AiGenerationSchema,
 }
 
-const SPOTIFY_GENERATION: GenerationContract<PublishedPlaylist> = {
-  events: GenerationStreamEventSchema,
-  result: PublishedPlaylistSchema,
+const SPOTIFY_PREVIEW_GENERATION: GenerationContract<SpotifyPreviewDto> = {
+  events: SpotifyPreviewStreamEventSchema,
+  result: SpotifyPreviewSchema,
 }
 
 const GUEST_GENERATION: GenerationContract<GeneratedPlaylistDto> = {
@@ -282,6 +283,23 @@ async function requestGeneration<T>(
   return parsed.data
 }
 
+function previewPath(previewId: string, suffix = '') {
+  return `/api/previews/${encodeURIComponent(previewId)}${suffix}`
+}
+
+async function requestSpotifyPreviewState(
+  path: string,
+  options: RequestOptions,
+): Promise<SpotifyPreviewStateDto> {
+  const parsed = SpotifyPreviewStateSchema.safeParse(
+    await request<unknown>(path, options),
+  )
+  if (!parsed.success) {
+    throw invalidGenerationResponseError()
+  }
+  return parsed.data
+}
+
 export const api = {
   getMe: () => request<{ user: User | null }>('/api/auth/me'),
 
@@ -331,23 +349,35 @@ export const api = {
       body: { names },
     }),
 
-  createMix: (input: CreateMixRequest, options?: GenerationOptions) =>
+  createMixPreview: (input: GenerateMixRequest, options?: GenerationOptions) =>
     requestGeneration(
-      '/api/playlists/mix',
+      '/api/previews/mix',
       input,
-      SPOTIFY_GENERATION,
+      SPOTIFY_PREVIEW_GENERATION,
       options?.onProgress,
       options?.signal,
     ),
 
-  createDiscover: (input: CreateDiscoverRequest, options?: GenerationOptions) =>
+  createDiscoverPreview: (
+    input: GenerateDiscoverRequest,
+    options?: GenerationOptions,
+  ) =>
     requestGeneration(
-      '/api/playlists/discover',
+      '/api/previews/discover',
       input,
-      SPOTIFY_GENERATION,
+      SPOTIFY_PREVIEW_GENERATION,
       options?.onProgress,
       options?.signal,
     ),
+
+  getSpotifyPreview: (previewId: string, options: { signal?: AbortSignal } = {}) =>
+    requestSpotifyPreviewState(previewPath(previewId), { signal: options.signal }),
+
+  saveSpotifyPreview: (previewId: string, input: SaveToSpotifyRequest) =>
+    requestSpotifyPreviewState(previewPath(previewId, '/save'), {
+      method: 'POST',
+      body: input,
+    }),
 
   generateMix: (input: GenerateMixRequest, options?: GenerationOptions) =>
     requestGeneration(

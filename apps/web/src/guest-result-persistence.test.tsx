@@ -266,7 +266,7 @@ describe('Guest result persistence', () => {
     renderWithProviders(<App />, { route: '/app/mix' })
 
     expect(
-      await screen.findByRole('button', { name: 'Create playlist' }),
+      await screen.findByRole('button', { name: 'Generate preview' }),
     ).toBeVisible()
     expect(
       screen.queryByRole('heading', { name: 'Blendify · Mix · Jazz' }),
@@ -390,15 +390,15 @@ describe('Guest leave protection', () => {
       'GET /api/genres': () =>
         jsonResponse({ genres: [{ id: 'jazz', name: 'Jazz' }] }),
       'GET /api/player/devices': () => jsonResponse({ devices: [] }),
-      'POST /api/playlists/mix': (_call, signal) =>
+      'POST /api/previews/mix': (_call, signal) =>
         pendingNdjsonResponse(signal).response,
     })
     renderWithProviders(<App />, { route: '/app/mix' })
 
     await user.click(await screen.findByRole('radio', { name: 'Genres' }))
     await user.click(await screen.findByRole('button', { name: /Jazz/ }))
-    await user.click(screen.getByRole('button', { name: 'Create playlist' }))
-    await screen.findByText('Creating your playlist')
+    await user.click(screen.getByRole('button', { name: 'Generate preview' }))
+    await screen.findByText('Generating your preview')
 
     expect(warnsBeforeUnload()).toBe(true)
     expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull()

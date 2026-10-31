@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useT } from '@/i18n/use-t'
 
-type AiPlaylistTitleProps = Readonly<{
+type PlaylistTitleFieldProps = Readonly<{
   titleId: string
   title: string | null
   suggestedTitle: string
@@ -24,7 +24,7 @@ type AiPlaylistTitleProps = Readonly<{
   children: ReactNode
 }>
 
-export function AiPlaylistTitle({
+export function PlaylistTitleField({
   titleId,
   title,
   suggestedTitle,
@@ -32,7 +32,7 @@ export function AiPlaylistTitle({
   isLocked,
   headingRef,
   children,
-}: AiPlaylistTitleProps) {
+}: PlaylistTitleFieldProps) {
   const t = useT()
   const inputId = useId()
   const [isEditing, setIsEditing] = useState(false)

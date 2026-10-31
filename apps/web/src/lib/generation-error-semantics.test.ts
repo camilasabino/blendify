@@ -91,18 +91,13 @@ describe('generation error classification', () => {
     )
   })
 
-  it('does not show a cancelled run, and does not call a lost Spotify stream a generic failure', () => {
-    expect(runFailureView(null, false, t, 'create.failed')).toBeNull()
+  it('does not show a cancelled run, and keeps a lost generation stream retryable', () => {
+    expect(runFailureView(null, t, 'create.failed')).toBeNull()
     const interrupted = runFailureView(
-      {
-        error: apiError(502, 'GENERATION_STREAM_INTERRUPTED'),
-        isOutcomeUncertain: true,
-      },
-      true,
+      { error: apiError(502, 'GENERATION_STREAM_INTERRUPTED') },
       t,
       'create.failed',
     )
-    expect(interrupted?.kind).toBe('connection_lost')
-    expect(interrupted?.message).not.toBe(messages.en['create.failed'])
+    expect(interrupted?.recovery).toBe('retry')
   })
 })

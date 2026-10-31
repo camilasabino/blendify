@@ -49,7 +49,9 @@ export function interruptedGenerationError(): ApiError {
 }
 
 export const SPOTIFY_OUTCOME_UNKNOWN = 'SPOTIFY_OUTCOME_UNKNOWN'
-export const SPOTIFY_PLAYLIST_INCOMPLETE = 'SPOTIFY_PLAYLIST_INCOMPLETE'
+export const PREVIEW_NOT_FOUND = 'PREVIEW_NOT_FOUND'
+export const PREVIEW_SAVE_IN_PROGRESS = 'PREVIEW_SAVE_IN_PROGRESS'
+export const CLIENT_OUTDATED = 'CLIENT_OUTDATED'
 
 export type EmptyResultFamily = 'mix' | 'discover'
 
@@ -65,16 +67,6 @@ const SERVER_RETRIED_PROVIDER_CODES = new Set([
   'SPOTIFY_REAUTH_REQUIRED',
   'CATALOG_UNAVAILABLE',
 ])
-
-export function isGenerationOutcomeUncertain(error: unknown): boolean {
-  if (error instanceof ApiError) {
-    return (
-      error.code === GENERATION_STREAM_INTERRUPTED ||
-      error.code === SPOTIFY_OUTCOME_UNKNOWN
-    )
-  }
-  return error instanceof TypeError
-}
 
 export function isSpotifyProviderFailure(error: unknown): boolean {
   return (
@@ -280,8 +272,9 @@ const STATIC_ERROR_MESSAGES: Record<string, MessageKey> = {
   SPOTIFY_PERMISSION_DENIED: 'errors.spotifyPermissionDenied',
   SPOTIFY_REQUEST_REJECTED: 'errors.spotifyRequestRejected',
   [SPOTIFY_OUTCOME_UNKNOWN]: 'errors.spotifyOutcomeUnknown',
-  [SPOTIFY_PLAYLIST_INCOMPLETE]: 'errors.spotifyPlaylistIncomplete',
   [INVALID_GENERATION_RESPONSE]: 'errors.invalidGenerationResponse',
+  [CLIENT_OUTDATED]: 'errors.clientOutdated',
+  [PREVIEW_NOT_FOUND]: 'spotifyPreview.expired',
   TRANSFER_TOKEN_INVALID: 'transfer.errorInvalid',
   TRANSFER_TOKEN_EXPIRED: 'transfer.errorExpired',
   TRANSFER_PLAYLIST_REJECTED: 'transfer.errorRejected',

@@ -1,49 +1,35 @@
-import type { QueryClient } from '@tanstack/react-query'
-import { isGenerationOutcomeUncertain } from '@/lib/api-error'
-import {
-  canRetryGeneration,
-  isWriteOutcomeUnknown,
-} from '@/lib/generation-failure'
+import { canRetryGeneration } from '@/lib/generation-failure'
 import {
   runDiscoverGeneration,
   runMixGeneration,
   type GenerationOutcome,
 } from '@/lib/playlist-generation'
 import {
+  hasUnsavedPreview,
+  isRunBusy,
   usePlaylistRunStore,
   type PlaylistRunSpec,
 } from '@/stores/playlist-run-store'
 import type { GenerationProgressHandler } from '@/lib/generation-stream'
+
+export type StartResult = 'started' | 'blocked' | 'needs_confirmation'
 
 function runGeneration(
   spec: PlaylistRunSpec,
   onProgress: GenerationProgressHandler,
   signal: AbortSignal,
 ): Promise<GenerationOutcome> {
-  const { mode, publication } = spec
+  const { mode } = spec
   if (spec.feature === 'mix') {
-    return runMixGeneration({
-      mode,
-      publication,
-      request: spec.request,
-      onProgress,
-      signal,
-    })
+    return runMixGeneration({ mode, request: spec.request, onProgress, signal })
   }
-  return runDiscoverGeneration({
-    mode,
-    publication,
-    request: spec.request,
-    onProgress,
-    signal,
-  })
+  return runDiscoverGeneration({ mode, request: spec.request, onProgress, signal })
 }
 
 async function executeRun(
   spec: PlaylistRunSpec,
   id: number,
   signal: AbortSignal,
-  queryClient: QueryClient,
 ): Promise<void> {
   try {
     const outcome = await runGeneration(
@@ -51,50 +37,53 @@ async function executeRun(
       (progress) => usePlaylistRunStore.getState().reportProgress(id, progress),
       signal,
     )
-    if (!usePlaylistRunStore.getState().succeed(id, outcome)) {
-      return
-    }
-    if (outcome.mode === 'spotify') {
-      void queryClient.invalidateQueries({ queryKey: ['usage-stats'] })
-      void queryClient.invalidateQueries({ queryKey: ['playlists'] })
-    }
+    usePlaylistRunStore.getState().succeed(id, outcome)
   } catch (error) {
-    usePlaylistRunStore
-      .getState()
-      .fail(id, error, spec.mode === 'spotify' && isGenerationOutcomeUncertain(error))
+    usePlaylistRunStore.getState().fail(id, error)
   }
+}
+
+export function replacesUnsavedPreview(spec: PlaylistRunSpec): boolean {
+  const { run } = usePlaylistRunStore.getState()
+  return (
+    spec.mode === 'spotify' &&
+    run !== null &&
+    run.spec.feature !== spec.feature &&
+    hasUnsavedPreview(run)
+  )
 }
 
 export function startPlaylistRun(
   spec: PlaylistRunSpec,
-  queryClient: QueryClient,
-): boolean {
+  options: { confirmedReplacement?: boolean } = {},
+): StartResult {
+  if (isRunBusy(usePlaylistRunStore.getState().run)) {
+    return 'blocked'
+  }
+  if (!options.confirmedReplacement && replacesUnsavedPreview(spec)) {
+    return 'needs_confirmation'
+  }
   const started = usePlaylistRunStore.getState().begin(spec)
   if (!started) {
-    return false
+    return 'blocked'
   }
-  void executeRun(spec, started.id, started.signal, queryClient)
-  return true
+  void executeRun(spec, started.id, started.signal)
+  return 'started'
 }
 
-export function rerunPlaylistRun(queryClient: QueryClient): boolean {
+export function rerunPlaylistRun(): boolean {
   const { run } = usePlaylistRunStore.getState()
-  if (!run || run.status.phase === 'active' || run.status.phase === 'uncertain') {
+  if (!run || run.status.phase === 'active') {
     return false
   }
-  if (run.status.phase === 'failed' && !canRetryGeneration(run.status.error, false)) {
+  if (run.status.phase === 'failed' && !canRetryGeneration(run.status.error)) {
     return false
   }
-  return startPlaylistRun(run.spec, queryClient)
-}
-
-export function recreateUncertainPlaylistRun(queryClient: QueryClient): boolean {
-  const { run } = usePlaylistRunStore.getState()
-  if (
-    run?.status.phase !== 'uncertain' ||
-    !isWriteOutcomeUnknown(run.status.error, true)
-  ) {
-    return false
+  if (run.status.phase === 'succeeded') {
+    const session = run.status.spotify
+    if (session && session.save.phase !== 'expired') {
+      return false
+    }
   }
-  return startPlaylistRun(run.spec, queryClient)
+  return startPlaylistRun(run.spec) === 'started'
 }

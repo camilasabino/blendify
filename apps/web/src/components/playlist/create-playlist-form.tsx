@@ -29,19 +29,15 @@ import { GenrePicker } from '@/components/genres/genre-picker'
 import { useGenreMixPlaylistName } from '@/components/playlist/genre-mix-playlist-name'
 import { GenerationResultPanel } from '@/components/playlist/generation-result-panel'
 import {
-  CoverToggle,
   GENERATION_ORDER_MODES,
   GenerationSettingsCollapse,
   GenerationSubmitBar,
   OrderModeSection,
   PopularityModeSection,
 } from '@/components/playlist/generation-form-shared'
-import {
-  blocksImplicitResubmit,
-  runCoverError,
-  runFailureView,
-} from '@/components/playlist/generation-result-helpers'
+import { runFailureView } from '@/components/playlist/generation-result-helpers'
 import { PLAYLIST_RUN_COPY } from '@/components/playlist/playlist-run-copy'
+import { ReplacePreviewDialog } from '@/components/playlist/replace-preview-dialog'
 import { ResultFiltersSection } from '@/components/playlist/result-filters-section'
 import {
   buildGenerationSummary,
@@ -60,7 +56,6 @@ import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Textarea } from '@/components/ui/textarea'
 import { ClearAllButton } from '@/components/ui/chip'
 import { useT } from '@/i18n/use-t'
-import { readPersistToLibraryPreference } from '@/lib/persist-to-library-preference'
 import {
   cn,
   estimateTrackCount,
@@ -74,11 +69,10 @@ import {
   buildDefaultPlaylistDescription,
   buildDefaultPlaylistName,
 } from '@/lib/playlist-name'
-import { renderPlaylistCoverBase64 } from '@/lib/playlist-cover'
 import { useCapabilities } from '@/hooks/use-capabilities'
 import { useCopiedLink } from '@/hooks/use-generation-feedback'
-import type { AppMode } from '@/lib/capabilities'
 import {
+  outcomePlaylist,
   outcomeRequestedTrackCount,
   outcomeTrackCount,
 } from '@/lib/playlist-generation'
@@ -125,7 +119,6 @@ const DEFAULT_VALUES: FormValues = {
   tracksPerGenre: DEFAULT_TRACKS_PER_GENRE,
   popularity: 'balanced',
   orderMode: 'random',
-  generateCover: true,
 }
 
 type VisibleOrderMode = (typeof GENERATION_ORDER_MODES)[number]
@@ -137,7 +130,6 @@ type FormValues = {
   tracksPerGenre: number
   popularity: PopularityMode
   orderMode: VisibleOrderMode
-  generateCover: boolean
 }
 
 function mixValidationError(
@@ -360,8 +352,6 @@ export function MixPlaylistForm() {
   const [pasteList, setPasteList] = useState('')
   const [pasteOpen, setPasteOpen] = useState(false)
   const [resolveError, setResolveError] = useState<string | null>(null)
-  const [preparingMode, setPreparingMode] = useState<AppMode>(capabilities.mode)
-  const [isPreparing, setIsPreparing] = useState(false)
   const [artistAdjustment, setArtistAdjustment] = useState<string | null>(null)
   const [genreAdjustment, setGenreAdjustment] = useState<string | null>(null)
   const copiedLink = useCopiedLink()
@@ -383,7 +373,6 @@ export function MixPlaylistForm() {
         tracksPerGenre: z.number().int().min(1).max(genreTrackMax),
         popularity: z.enum(['popular', 'balanced', 'rarities']),
         orderMode: z.enum(GENERATION_ORDER_MODES),
-        generateCover: z.boolean(),
       }),
     [artistTrackMax, genreTrackMax],
   )
@@ -535,19 +524,10 @@ export function MixPlaylistForm() {
     resolveMutation.mutate(names)
   }
 
-  async function onSubmit(values: FormValues) {
-    if (
-      isPreparing ||
-      playlistRun.isActive ||
-      playlistRun.busyFeature ||
-      !capabilities.isResolved
-    ) {
+  function onSubmit(values: FormValues) {
+    if (playlistRun.isActive || playlistRun.busyFeature || !capabilities.isResolved) {
       return
     }
-    if (blocksImplicitResubmit(playlistRun.failure)) {
-      return
-    }
-    const generationMode = capabilities.mode
 
     const seedNames =
       mode === 'artists'
@@ -565,67 +545,37 @@ export function MixPlaylistForm() {
       return
     }
 
-    setIsPreparing(true)
-    setPreparingMode(generationMode)
+    const name = playlistName
+    const description = buildDefaultPlaylistDescription(seedNames, t)
+    const request: GenerateMixRequest =
+      mode === 'artists'
+        ? {
+            kind: 'artist_mix',
+            name,
+            description,
+            artistIds: artists.map((a) => a.id),
+            artists: artists.map((a) => ({
+              id: a.id,
+              name: a.name,
+              imageUrl: a.imageUrl ?? null,
+            })),
+            filters: supportedSelectionFilters('artist_mix', filters),
+            tracksPerSeed: values.tracksPerArtist,
+            popularity: values.popularity,
+            orderMode: values.orderMode,
+          }
+        : {
+            kind: 'genre_mix',
+            name,
+            description,
+            genreIds: genres.map((g) => g.id),
+            filters: supportedSelectionFilters('genre_mix', filters),
+            popularity: values.popularity,
+            tracksPerSeed: values.tracksPerGenre,
+            orderMode: values.orderMode,
+          }
 
-    try {
-      const name = playlistName
-      const description = buildDefaultPlaylistDescription(seedNames, t)
-
-      let coverImageBase64: string | undefined
-      let coverFailed = false
-      if (generationMode === 'spotify' && values.generateCover) {
-        try {
-          coverImageBase64 = await renderPlaylistCoverBase64({
-            title: name,
-            kind: 'mix',
-          })
-        } catch {
-          coverFailed = true
-        }
-      }
-
-      const request: GenerateMixRequest =
-        mode === 'artists'
-          ? {
-              kind: 'artist_mix',
-              name,
-              description,
-              artistIds: artists.map((a) => a.id),
-              artists: artists.map((a) => ({
-                id: a.id,
-                name: a.name,
-                imageUrl: a.imageUrl ?? null,
-              })),
-              filters: supportedSelectionFilters('artist_mix', filters),
-              tracksPerSeed: values.tracksPerArtist,
-              popularity: values.popularity,
-              orderMode: values.orderMode,
-            }
-          : {
-              kind: 'genre_mix',
-              name,
-              description,
-              genreIds: genres.map((g) => g.id),
-              filters: supportedSelectionFilters('genre_mix', filters),
-              popularity: values.popularity,
-              tracksPerSeed: values.tracksPerGenre,
-              orderMode: values.orderMode,
-            }
-
-      playlistRun.start({
-        feature: 'mix',
-        mode: generationMode,
-        request,
-        publication: {
-          coverImageBase64,
-          persistToLibrary: readPersistToLibraryPreference(),
-        },
-        coverFailed,
-      })
-    } finally {
-      setIsPreparing(false)
-    }
+    playlistRun.start({ feature: 'mix', mode: capabilities.mode, request })
   }
 
   const submit = form.handleSubmit(onSubmit)
@@ -666,15 +616,16 @@ export function MixPlaylistForm() {
   const mixKind = mode === 'artists' ? 'artist_mix' : 'genre_mix'
   const detailsStep = supportsAnySelectionFilter(mixKind) ? 4 : 3
   const { result, progress, failure } = playlistRun
-  const submittedMode = playlistRun.run?.spec.mode ?? preparingMode
+  const submittedMode = playlistRun.run?.spec.mode ?? capabilities.mode
   const workingCopy = generationFormCopy(submittedMode, 'mix')
-  const isGenerating = isPreparing || playlistRun.isActive
+  const isGenerating = playlistRun.isActive
   const settingsCollapse = useGenerationSettingsCollapse(
     isGenerating,
     result !== null,
   )
-  const settingsSummary = result
-    ? buildRecipeSummary(result.playlist.generation, outcomeTrackCount(result), t, genreLabel)
+  const resultGeneration = result ? outcomePlaylist(result)?.generation : null
+  const settingsSummary = result && resultGeneration
+    ? buildRecipeSummary(resultGeneration, outcomeTrackCount(result), t, genreLabel)
     : buildGenerationSummary(
         {
           seedNames:
@@ -696,25 +647,13 @@ export function MixPlaylistForm() {
         ].join(' · ')
       : null
   const requestedTrackCount = result ? outcomeRequestedTrackCount(result) : 0
-  const spec = playlistRun.run?.spec
-  const libraryAvailable = spec?.publication.persistToLibrary ?? false
-  const failureView = runFailureView(
-    failure,
-    libraryAvailable,
-    t,
-    'create.failed',
-    'mix',
-  )
-  const coverError = runCoverError(spec?.coverFailed, result, t)
+  const failureView = runFailureView(failure, t, 'create.failed', 'mix')
   const rootError = form.formState.errors.root?.message ?? null
   let disabledReason: string | null = t('common.loading')
   if (capabilities.isResolved) {
     disabledReason = playlistRun.busyFeature
       ? t(PLAYLIST_RUN_COPY[playlistRun.busyFeature].busy)
       : mixDisabledReason(mode, artists.length, genres.length, t)
-    if (!disabledReason && blocksImplicitResubmit(failure)) {
-      disabledReason = t('create.resubmitBlockedUncertain')
-    }
   }
 
   return (
@@ -736,17 +675,24 @@ export function MixPlaylistForm() {
           result={result}
           progress={progress}
           failure={failureView}
-          coverError={coverError}
           requestedTrackCount={requestedTrackCount}
           workingTitleKey={workingCopy.workingTitle}
           workingHintKey={workingCopy.workingHint}
           requestStarted={playlistRun.isActive}
           preparedTransfer={playlistRun.preparedTransfer}
           onTransferPrepared={playlistRun.attachTransfer}
+          spotify={
+            playlistRun.spotifySession && playlistRun.run
+              ? {
+                  session: playlistRun.spotifySession,
+                  actions: playlistRun.spotifyActions,
+                  focusOnArrival: !playlistRun.run.seen,
+                }
+              : null
+          }
           copied={copiedLink.copied}
           onCopy={(url) => void copiedLink.copy(url)}
           onRetry={() => void playlistRun.rerun()}
-          onCreateNew={() => void playlistRun.recreateUncertain()}
           onAdjust={adjustAndRecreate}
           onCreateAnother={createAnother}
         />
@@ -757,7 +703,7 @@ export function MixPlaylistForm() {
         collapsed={settingsCollapse.collapsed}
         onToggle={settingsCollapse.toggleSettings}
         summary={settingsSummary}
-        note={recreateNote(result, t)}
+        note={recreateNote(result, playlistRun.spotifySession, t)}
       >
         <form
           ref={formRef}
@@ -862,26 +808,6 @@ export function MixPlaylistForm() {
                     onAdjust={() => setGenreAdjustment(null)}
                   />
                 )}
-                {capabilities.canPublishToSpotify ? (
-                  <div className="pt-4">
-                    <Controller
-                      control={form.control}
-                      name="generateCover"
-                      render={({ field }) => (
-                        <CoverToggle
-                          id="generateCover"
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          hint={
-                            mode === 'artists'
-                              ? t('create.coverHintArtists')
-                              : t('create.coverHintGenres')
-                          }
-                        />
-                      )}
-                    />
-                  </div>
-                ) : null}
               </div>
             </FormSection>
 
@@ -900,6 +826,12 @@ export function MixPlaylistForm() {
           />
         </form>
       </GenerationSettingsCollapse>
+
+      <ReplacePreviewDialog
+        replaced={playlistRun.pendingReplacement}
+        onConfirm={playlistRun.confirmReplacement}
+        onCancel={playlistRun.cancelReplacement}
+      />
     </PageContainer>
   )
 }

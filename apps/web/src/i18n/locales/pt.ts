@@ -68,9 +68,6 @@ export const pt: Record<MessageKey, string> = {
   'discover.needArtist': 'Escolha um artista para continuar.',
   'discover.needTrack': 'Escolha uma música para continuar.',
   'discover.removeTrack': 'Remover {name}',
-  'discover.generate': 'Criar playlist',
-  'discover.generating': 'Criando…',
-  'discover.working': 'Criando sua playlist',
   'discover.workingHint': 'Buscando músicas relacionadas…',
   'discover.failed': 'Não foi possível criar a playlist. Tente de novo.',
   'discover.noTracksFound':
@@ -84,7 +81,6 @@ export const pt: Record<MessageKey, string> = {
   'create.modeArtists': 'Artistas',
   'create.modeGenres': 'Gêneros',
   'create.stepSource': 'Artistas ou gêneros',
-  'create.stepDetails': 'Tamanho e capa',
   'create.generateCover': 'Adicionar uma capa',
   'create.coverFailed': 'Não foi possível adicionar a capa.',
   'create.artists': 'Artistas',
@@ -163,9 +159,6 @@ export const pt: Record<MessageKey, string> = {
   'create.removeArtist': 'Remover {name}',
   'create.failed': 'Não foi possível criar a playlist. Tente novamente.',
   'create.failedTitle': 'Não foi possível criar a playlist',
-  'create.generating': 'Criando…',
-  'create.generate': 'Criar playlist',
-  'create.working': 'Criando sua playlist',
   'create.ready': 'Playlist pronta',
   'create.createAnother': 'Criar outra',
   'create.adjustAndRecreate': 'Testar outras configurações',
@@ -182,7 +175,6 @@ export const pt: Record<MessageKey, string> = {
     'Ainda em andamento — obrigado pela paciência…',
   'create.progressResolving': 'Preparando sua seleção',
   'create.progressMatching': 'Buscando músicas',
-  'create.progressPublishing': 'Criando a playlist no Spotify',
   'create.progressCount': '{current} de {total} músicas',
   'create.nearCompleteTracks':
     'Adicionamos {count} de {requested} músicas: quase o total solicitado.',
@@ -193,7 +185,6 @@ export const pt: Record<MessageKey, string> = {
   'create.openSpotify': 'Abrir no Spotify',
   'create.copyLink': 'Copiar link',
   'create.copied': 'Copiado',
-  'create.linkPending': 'O link do Spotify aparece quando a playlist estiver pronta.',
   'preview.player': 'Prévia da playlist',
   'preview.modeLabel': 'Ouvir',
   'preview.modeHere': 'Ouvir aqui',
@@ -406,11 +397,6 @@ export const pt: Record<MessageKey, string> = {
   'create.addSuggestion': 'Adicionar {name}',
   'create.recreateNote':
     'Alterar estas configurações cria uma nova playlist. A que você acabou de criar continua no Spotify.',
-  'create.generateNew': 'Criar nova playlist',
-  'create.leaveNoteLibrary':
-    'Você pode explorar outras seções enquanto ela é criada. A playlist será salva no Spotify e na sua biblioteca. Mantenha esta aba aberta: se você atualizar ou fechar a página, o Blendify não poderá mais mostrar o resultado.',
-  'create.leaveNoteSpotify':
-    'Você pode explorar outras seções enquanto ela é criada. A playlist será salva no Spotify. Mantenha esta aba aberta: se você atualizar ou fechar a página, o Blendify não poderá mais mostrar o resultado.',
   'common.songsOne': '1 música',
   'common.songsMany': '{count} músicas',
   'preview.showAll': 'Ver todas as {count} músicas',
@@ -543,30 +529,6 @@ export const pt: Record<MessageKey, string> = {
     'O Spotify não conseguiu processar esta solicitação. Tente novamente mais tarde.',
   'errors.spotifyOutcomeUnknown':
     'O Spotify não confirmou se a alteração foi feita. Confira o Spotify antes de tentar de novo.',
-  'errors.spotifyPlaylistIncomplete':
-    'O Blendify criou a playlist no Spotify, mas não conseguiu concluí-la. Abra no Spotify para conferir.',
-  'create.unconfirmedTitle':
-    'Não foi possível confirmar a playlist',
-  'create.unconfirmed':
-    'O Spotify não confirmou se a playlist foi criada. Ela pode já estar na sua conta, então confira suas playlists no Spotify antes de criá-la de novo.',
-  'create.createNewAnyway':
-    'Criar uma playlist nova mesmo assim',
-  'create.createNewAnywayHint':
-    'Isso envia o mesmo pedido de novo como uma playlist separada. Se a anterior foi criada, você vai ter as duas no Spotify.',
-  'create.resubmitBlockedUncertain':
-    'Confira o Spotify primeiro. Para criar outra playlist, use “Criar uma playlist nova mesmo assim”, acima.',
-  'create.incompleteTitle':
-    'Não foi possível concluir a playlist',
-  'create.incompleteNoTracks':
-    'O Blendify criou a playlist no Spotify, mas o Spotify não aceitou as músicas. Abra no Spotify para conferir.',
-  'create.incompleteUnknownTracks':
-    'O Blendify criou a playlist no Spotify, mas não conseguiu confirmar se as músicas foram adicionadas. Abra no Spotify para conferir.',
-  'create.incompleteLibrary':
-    'Sua playlist já está no Spotify com todas as músicas, mas o Blendify não conseguiu salvá-la na sua biblioteca.',
-  'runStatus.unconfirmed.mix':
-    'Não foi possível confirmar sua mistura',
-  'runStatus.unconfirmed.discover':
-    'Não foi possível confirmar sua playlist do Descobrir',
   'runStatus.incomplete.mix':
     'Sua mistura ficou incompleta',
   'runStatus.incomplete.discover':
@@ -972,10 +934,6 @@ export const pt: Record<MessageKey, string> = {
     'Não foi possível criar sua mistura',
   'runStatus.failed.discover':
     'Não foi possível criar no Descobrir',
-  'runStatus.uncertain.mix':
-    'A conexão caiu ao criar sua mistura',
-  'runStatus.uncertain.discover':
-    'A conexão caiu no Descobrir',
   'runStatus.busy.mix':
     'Espere sua mistura terminar antes de criar outra playlist.',
   'runStatus.busy.discover':
@@ -988,14 +946,6 @@ export const pt: Record<MessageKey, string> = {
     'Ver detalhes',
   'runStatus.dismiss':
     'Fechar',
-  'create.uncertainTitle':
-    'A conexão caiu',
-  'create.uncertainLibrary':
-    'O Blendify perdeu a conexão antes de confirmar o resultado. A playlist pode já existir, então confira sua biblioteca ou o Spotify antes de criá-la de novo.',
-  'create.uncertainSpotify':
-    'O Blendify perdeu a conexão antes de confirmar o resultado. A playlist pode já existir, então confira o Spotify antes de criá-la de novo.',
-  'create.openLibrary':
-    'Abrir biblioteca',
   'home.eyebrow': 'Início',
   'home.title': 'O que você quer criar?',
   'home.subtitle':
@@ -1010,4 +960,88 @@ export const pt: Record<MessageKey, string> = {
   'home.connectTitle': 'Quer salvar suas playlists direto no Spotify?',
   'home.connectBody':
     'Conecte o Spotify para salvar playlists privadas na sua conta, ter uma biblioteca e ver suas estatísticas. As opções acima funcionam sem conectar.',
+  'spotifyPreview.generate':
+    'Gerar prévia',
+  'spotifyPreview.generating':
+    'Gerando…',
+  'spotifyPreview.generateNew':
+    'Gerar nova prévia',
+  'spotifyPreview.working':
+    'Gerando sua prévia',
+  'spotifyPreview.leaveNote':
+    'Você pode navegar por outras seções enquanto isso roda. Nada é salvo no Spotify até você escolher Salvar no Spotify. Mantenha esta aba aberta até a prévia ficar pronta.',
+  'spotifyPreview.eyebrow':
+    'Prévia · ainda não salva',
+  'spotifyPreview.temporary':
+    'Esta prévia é temporária e ainda não foi salva. Nada chega ao Spotify até você escolher Salvar no Spotify, e a prévia expira em cerca de 30 minutos.',
+  'spotifyPreview.readyAnnouncement':
+    'Prévia pronta, ainda não salva',
+  'spotifyPreview.titleRequired':
+    'Adicione um título para salvar esta playlist.',
+  'spotifyPreview.recreateNote':
+    'Mudar estas configurações cria uma nova prévia. Esta fica aqui até a nova ficar pronta.',
+  'spotifyPreview.confirming':
+    'Confirmando se a playlist foi salva no Spotify…',
+  'spotifyPreview.confirmingShort':
+    'Confirmando…',
+  'spotifyPreview.confirmingPaused':
+    'O Blendify ainda não conseguiu confirmar o salvamento. Verifique o status de novo e não salve outra vez até saber o resultado.',
+  'spotifyPreview.checkStatus':
+    'Verificar status',
+  'spotifyPreview.expiredTitle':
+    'Esta prévia expirou',
+  'spotifyPreview.expired':
+    'As prévias ficam guardadas por cerca de 30 minutos e esta não existe mais. Você pode gerá-la de novo com as mesmas configurações, mas as músicas podem ser diferentes.',
+  'spotifyPreview.unavailableTitle':
+    'Esta prévia não está mais disponível',
+  'spotifyPreview.unavailableMaybeSaved':
+    'O Blendify não encontra mais esta prévia nem consegue confirmar se ela foi salva. Se você estava salvando, confira suas playlists no Spotify antes de gerar de novo. Uma nova prévia pode ter músicas diferentes.',
+  'spotifyPreview.lost':
+    'O Blendify não encontra mais esta prévia. Você pode gerá-la de novo com as mesmas configurações, mas as músicas podem ser diferentes.',
+  'spotifyPreview.generateAgain':
+    'Gerar de novo',
+  'spotifyPreview.regenerationFailed':
+    'Não foi possível gerar uma nova prévia. Esta continua disponível.',
+  'spotifyPreview.replaceTitle':
+    'Substituir a prévia não salva?',
+  'spotifyPreview.replaceBody.mix':
+    'Sua prévia da mistura não está salva no Spotify. Gerar esta playlist vai descartá-la.',
+  'spotifyPreview.replaceBody.discover':
+    'Sua prévia do Descobrir não está salva no Spotify. Gerar esta playlist vai descartá-la.',
+  'spotifyPreview.replaceConfirm':
+    'Substituir prévia',
+  'spotifyPreview.replaceCancel':
+    'Manter prévia',
+  'spotifySave.reason.outcomeUnknown':
+    'O Spotify não confirmou se a playlist foi criada, então ela pode existir na sua conta. Confira o Spotify. O Blendify não vai tentar salvá-la de novo daqui.',
+  'spotifySave.reason.tracksIncomplete':
+    'A playlist existe no Spotify, mas podem faltar músicas. Abra no Spotify para conferir quais foram adicionadas.',
+  'spotifySave.reason.libraryNotSaved':
+    'A playlist está no Spotify com todas as músicas, mas o Blendify não conseguiu adicioná-la à sua biblioteca.',
+  'spotifySave.reason.interrupted':
+    'O salvamento foi interrompido antes de o Blendify conseguir confirmá-lo. A playlist pode existir na sua conta do Spotify, então confira lá antes de gerar de novo.',
+  'errors.clientOutdated':
+    'Esta versão do Blendify está desatualizada. Recarregue a página para continuar.',
+  'runStatus.preview.mix':
+    'A prévia da sua mistura está pronta · não salva',
+  'runStatus.preview.discover':
+    'A prévia do Descobrir está pronta · não salva',
+  'runStatus.saving.mix':
+    'Salvando sua mistura no Spotify',
+  'runStatus.saving.discover':
+    'Salvando sua playlist do Descobrir no Spotify',
+  'runStatus.confirming.mix':
+    'Confirmando que sua mistura foi salva',
+  'runStatus.confirming.discover':
+    'Confirmando que sua playlist do Descobrir foi salva',
+  'runStatus.saved.mix':
+    'Sua mistura está salva no Spotify',
+  'runStatus.saved.discover':
+    'Sua playlist do Descobrir está salva no Spotify',
+  'runStatus.expired.mix':
+    'A prévia da sua mistura expirou',
+  'runStatus.expired.discover':
+    'A prévia do Descobrir expirou',
+  'runStatus.viewPreview':
+    'Ver prévia',
 }

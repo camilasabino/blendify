@@ -6,9 +6,12 @@ type PlaylistRunCopy = {
   active: MessageKey
   succeeded: MessageKey
   failed: MessageKey
-  uncertain: MessageKey
-  unconfirmed: MessageKey
+  preview: MessageKey
+  saving: MessageKey
+  confirming: MessageKey
+  saved: MessageKey
   incomplete: MessageKey
+  expired: MessageKey
   busy: MessageKey
 }
 
@@ -18,9 +21,12 @@ export const PLAYLIST_RUN_COPY: Record<PlaylistRunFeature, PlaylistRunCopy> = {
     active: 'runStatus.active.mix',
     succeeded: 'runStatus.succeeded.mix',
     failed: 'runStatus.failed.mix',
-    uncertain: 'runStatus.uncertain.mix',
-    unconfirmed: 'runStatus.unconfirmed.mix',
+    preview: 'runStatus.preview.mix',
+    saving: 'runStatus.saving.mix',
+    confirming: 'runStatus.confirming.mix',
+    saved: 'runStatus.saved.mix',
     incomplete: 'runStatus.incomplete.mix',
+    expired: 'runStatus.expired.mix',
     busy: 'runStatus.busy.mix',
   },
   discover: {
@@ -28,9 +34,12 @@ export const PLAYLIST_RUN_COPY: Record<PlaylistRunFeature, PlaylistRunCopy> = {
     active: 'runStatus.active.discover',
     succeeded: 'runStatus.succeeded.discover',
     failed: 'runStatus.failed.discover',
-    uncertain: 'runStatus.uncertain.discover',
-    unconfirmed: 'runStatus.unconfirmed.discover',
+    preview: 'runStatus.preview.discover',
+    saving: 'runStatus.saving.discover',
+    confirming: 'runStatus.confirming.discover',
+    saved: 'runStatus.saved.discover',
     incomplete: 'runStatus.incomplete.discover',
+    expired: 'runStatus.expired.discover',
     busy: 'runStatus.busy.discover',
   },
 }

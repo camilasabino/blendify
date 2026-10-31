@@ -67,6 +67,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
             'usage counters: how many mixes you have created, which artists and genres you started from, and how often.',
           ],
           'Blendify reads the IDs of the playlists in your Spotify account so it can tell which of the playlists it created are still there. It does not read your listening history or your saved tracks, and it does not read the contents of playlists it did not create. When you save a mix to Spotify, Blendify writes that private playlist — and its cover image, if you add one — to your Spotify account. Playback controls list your active Spotify devices and start playback on the one you pick; those devices are used live and not stored.',
+          'In Spotify Mode, generating a Mix or a Discover playlist creates nothing on Spotify. The result is a preview that the Blendify server keeps in its cache, linked to your Blendify account, for about 30 minutes after you generate it: the generated playlist and the settings used. Later steps do not extend that time. When you choose Save to Spotify, the server keeps the result of that save — its status and the link to the Spotify playlist — for about 24 hours after its last update, and the cache does not hold the title or the songs for that long. These entries are not deleted the moment you leave or log out; they expire on their own.',
         ],
       },
       {
@@ -91,6 +92,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
             'Your language choice and your “save to library” preference are stored by your browser on your device only.',
             'When you use Create with AI, the tab’s session storage keeps a reference to your session, your first request and the playlist title you edit. It is cleared when you close the tab, start over or log out; the text of the changes you ask for is not stored there.',
             'When you generate a playlist without connecting Spotify, the tab’s session storage keeps that playlist, the settings used to generate it and, if you prepare one, the Soundiiz transfer link, so a reload does not lose it. It holds no account or session information and is cleared when you close the tab, create another playlist or connect Spotify.',
+            'In Spotify Mode, the tab’s session storage keeps a reference to your unsaved preview: its identifier and expiry time, the settings used, the playlist title you edit and your cover choice. It does not keep the songs, Spotify tokens or session cookies, and it is cleared when you close the tab, create another playlist, log out or the preview expires.',
           ],
           'Blendify sets no advertising cookies and runs no behavioral tracking system of its own. Site usage and page performance are measured through Cloudflare Web Analytics, which does not use cookies for that.',
         ],
@@ -113,7 +115,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
         body: [
           [
             'Your profile, Spotify tokens, saved playlists and usage counters stay until you remove them or delete your account. Blendify does not expire them on a schedule.',
-            'Cache entries expire on their own: rate-limit counters within about ten minutes, catalog lookups after 5 to 30 minutes, Create with AI sessions about 30 minutes after the first request, Last.fm results after up to 7 days. Nothing in that cache is written to disk.',
+            'Cache entries expire on their own: rate-limit counters within about ten minutes, catalog lookups after 5 to 30 minutes, Create with AI sessions about 30 minutes after the first request, Spotify Mode previews about 30 minutes after they are generated, the result of saving a preview about 24 hours after its last update, Last.fm results after up to 7 days. Nothing in that cache is written to disk.',
             'Playlists generated without signing in, playback device lists and transfer links are never written to the database.',
             'Operational logs record the metadata needed to run and diagnose the service, such as which provider operation or URL was called, the resulting status and how long it took. Those URLs are recorded with the search terms, names and IDs replaced by placeholders, so the artist, track and genre names that were looked up are not kept in them. Authentication credentials, session cookie values, Spotify tokens and application secrets are kept out of those logs. Cloudflare and Railway keep their own request logs.',
           ],
@@ -127,7 +129,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
             'You can remove individual playlists from your Blendify library whenever you want, and reset your usage statistics from the Stats page.',
             'Delete account, in the account menu, asks you to confirm and then deletes your Blendify user record together with your stored Spotify tokens, your saved playlists and your usage data, and ends your session. You do not need to email anyone to do it.',
           ],
-          'Deleting your Blendify account does not delete your Spotify account and does not remove playlists already saved to Spotify. Blendify deletes the Spotify tokens it stored. It does not ask Spotify to disconnect Blendify; you can remove that connection in your Spotify account settings. If you connect the same Spotify account again later, the previous library and stats are gone.',
+          'Deleting your Blendify account does not delete your Spotify account and does not remove playlists already saved to Spotify. Blendify deletes the Spotify tokens it stored. It does not ask Spotify to disconnect Blendify; you can remove that connection in your Spotify account settings. If you connect the same Spotify account again later, the previous library and stats are gone. Deleting your account does not remove preview or save-result entries from the cache straight away; they expire on their own within the times described above.',
           'Backup copies of the database taken before earlier changes are kept outside the running service so it can be restored after a failure. They are not rewritten, so a copy made before you deleted your account can still contain data from that time.',
         ],
       },
@@ -177,6 +179,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
             'contadores de uso: cuántas mezclas creaste, qué artistas y géneros elegiste como punto de partida, y con qué frecuencia.',
           ],
           'Blendify lee los IDs de las playlists de tu cuenta de Spotify para saber cuáles de las que creó siguen ahí. No lee tu historial de escucha ni tus canciones guardadas, y no lee el contenido de playlists que no creó. Cuando guardas una mezcla en Spotify, Blendify escribe esa playlist privada —y su portada, si agregas una— en tu cuenta de Spotify. Los controles de reproducción listan tus dispositivos activos de Spotify y empiezan la reproducción en el que elijas; esos dispositivos se usan en el momento y no se guardan.',
+          'En el modo Spotify, generar una Mix o una playlist de Descubrir no crea nada en Spotify. El resultado es una vista previa que el servidor de Blendify guarda en su caché, vinculada a tu cuenta de Blendify, durante unos 30 minutos después de generarla: la playlist generada y los ajustes usados. Los pasos siguientes no extienden ese tiempo. Cuando eliges Guardar en Spotify, el servidor conserva el resultado de ese guardado —su estado y el enlace a la playlist de Spotify— unas 24 horas después de su última actualización, y la caché no guarda el título ni las canciones durante todo ese tiempo. Estas entradas no se borran en el momento en que sales o cierras sesión; caducan por sí solas.',
         ],
       },
       {
@@ -201,6 +204,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
             'Tu idioma y tu preferencia de “guardar en la biblioteca” los almacena tu navegador, solo en tu dispositivo.',
             'Cuando usas Crear con IA, el almacenamiento de sesión de la pestaña guarda una referencia a tu sesión, tu primer pedido y el título de playlist que editas. Se borra al cerrar la pestaña, empezar de nuevo o cerrar sesión; el texto de los cambios que pides no se guarda ahí.',
             'Cuando generas una playlist sin conectar Spotify, el almacenamiento de sesión de la pestaña guarda esa playlist, la configuración usada para generarla y, si preparas una, el enlace de transferencia de Soundiiz, para que una recarga no la pierda. No contiene información de cuenta ni de sesión y se borra al cerrar la pestaña, crear otra playlist o conectar Spotify.',
+            'En el modo Spotify, el almacenamiento de sesión de la pestaña guarda una referencia a tu vista previa sin guardar: su identificador y su hora de caducidad, los ajustes usados, el título que editas y tu elección de portada. No guarda las canciones, los tokens de Spotify ni las cookies de sesión, y se borra al cerrar la pestaña, crear otra playlist, cerrar sesión o cuando la vista previa caduca.',
           ],
           'Blendify no usa cookies de publicidad ni un sistema propio de rastreo de comportamiento. El uso del sitio y el rendimiento de las páginas se miden con Cloudflare Web Analytics, que para eso no usa cookies.',
         ],
@@ -223,7 +227,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
         body: [
           [
             'Tu perfil, los tokens de Spotify, las playlists guardadas y los contadores de uso se conservan hasta que los elimines o elimines tu cuenta. Blendify no los caduca por calendario.',
-            'Las entradas de la caché expiran por sí solas: los contadores de límite de uso en unos diez minutos, las consultas de catálogo entre 5 y 30 minutos, las sesiones de Crear con IA unos 30 minutos después del primer pedido, los resultados de Last.fm hasta 7 días. Nada de esa caché se escribe en disco.',
+            'Las entradas de la caché expiran por sí solas: los contadores de límite de uso en unos diez minutos, las consultas de catálogo entre 5 y 30 minutos, las sesiones de Crear con IA unos 30 minutos después del primer pedido, las vistas previas del modo Spotify unos 30 minutos después de generarlas, el resultado de guardar una vista previa unas 24 horas después de su última actualización, los resultados de Last.fm hasta 7 días. Nada de esa caché se escribe en disco.',
             'Las playlists generadas sin iniciar sesión, las listas de dispositivos de reproducción y los enlaces de transferencia nunca se escriben en la base de datos.',
             'Los logs operativos registran los metadatos necesarios para operar y diagnosticar el servicio, como qué operación o URL de proveedor se llamó, el estado resultante y cuánto tardó. Esas URLs se registran con los términos de búsqueda, nombres e IDs reemplazados por marcadores, así que no conservan los nombres de artistas, canciones y géneros consultados. Las credenciales de autenticación, los valores de la cookie de sesión, los tokens de Spotify y los secretos de la aplicación quedan fuera de esos logs. Cloudflare y Railway conservan sus propios logs de solicitudes.',
           ],
@@ -237,7 +241,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
             'Puedes eliminar playlists de tu biblioteca de Blendify cuando quieras y reiniciar tus estadísticas de uso desde la página de estadísticas.',
             'Eliminar cuenta, en el menú de cuenta, te pide confirmación y luego borra tu registro de usuario de Blendify junto con los tokens de Spotify guardados, tus playlists guardadas y tus datos de uso, y cierra tu sesión. No necesitas escribirle a nadie para hacerlo.',
           ],
-          'Eliminar tu cuenta de Blendify no elimina tu cuenta de Spotify ni borra las playlists ya guardadas en Spotify. Blendify borra los tokens de Spotify que tenía guardados. No pide a Spotify que desconecte Blendify; esa conexión la quitas tú en la configuración de tu cuenta de Spotify. Si vuelves a conectar la misma cuenta de Spotify, la biblioteca y las estadísticas anteriores ya no están.',
+          'Eliminar tu cuenta de Blendify no elimina tu cuenta de Spotify ni borra las playlists ya guardadas en Spotify. Blendify borra los tokens de Spotify que tenía guardados. No pide a Spotify que desconecte Blendify; esa conexión la quitas tú en la configuración de tu cuenta de Spotify. Si vuelves a conectar la misma cuenta de Spotify, la biblioteca y las estadísticas anteriores ya no están. Eliminar tu cuenta no borra de inmediato las entradas de vista previa ni de resultado de guardado de la caché; caducan por sí solas en los plazos descritos arriba.',
           'Las copias de respaldo de la base de datos tomadas antes de cambios anteriores se conservan fuera del servicio en funcionamiento para poder restaurarlo tras una falla. No se reescriben, así que una copia hecha antes de que elimines tu cuenta todavía puede contener datos de ese momento.',
         ],
       },
@@ -287,6 +291,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
             'contadores de uso: quantas misturas você criou, quais artistas e gêneros escolheu como ponto de partida e com que frequência;',
           ],
           'O Blendify lê os IDs das playlists da sua conta do Spotify para saber quais das que ele criou ainda estão lá. Ele não lê seu histórico de audição nem suas músicas salvas, e não lê o conteúdo de playlists que não criou. Quando você salva uma mistura no Spotify, o Blendify grava essa playlist privada — e a capa, se você adicionar uma — na sua conta do Spotify. Os controles de reprodução listam seus dispositivos ativos do Spotify e iniciam a reprodução no que você escolher; esses dispositivos são usados na hora e não são armazenados.',
+          'No modo Spotify, gerar uma mistura ou uma playlist do Descobrir não cria nada no Spotify. O resultado é uma prévia que o servidor do Blendify guarda no cache, vinculada à sua conta do Blendify, por cerca de 30 minutos depois de gerá-la: a playlist gerada e as configurações usadas. As etapas seguintes não estendem esse tempo. Quando você escolhe Salvar no Spotify, o servidor guarda o resultado desse salvamento — o status e o link da playlist no Spotify — por cerca de 24 horas depois da última atualização, e o cache não guarda o título nem as músicas por todo esse tempo. Essas entradas não são apagadas no momento em que você sai ou encerra a sessão; elas expiram sozinhas.',
         ],
       },
       {
@@ -311,6 +316,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
             'Seu idioma e sua preferência de “salvar na biblioteca” são guardados pelo seu navegador, somente no seu dispositivo.',
             'Quando você usa o Criar com IA, o armazenamento de sessão da aba guarda uma referência à sua sessão, seu primeiro pedido e o título de playlist que você edita. Ele é apagado quando você fecha a aba, recomeça ou sai da conta; o texto das mudanças que você pede não é guardado ali.',
             'Quando você gera uma playlist sem conectar o Spotify, o armazenamento de sessão da aba guarda essa playlist, as configurações usadas para gerá-la e, se você preparar uma, o link de transferência do Soundiiz, para que recarregar a página não a perca. Ele não contém informações de conta nem de sessão e é apagado quando você fecha a aba, cria outra playlist ou conecta o Spotify.',
+            'No modo Spotify, o armazenamento de sessão da aba guarda uma referência à sua prévia não salva: o identificador e o horário de expiração, as configurações usadas, o título que você edita e sua escolha de capa. Ele não guarda as músicas, os tokens do Spotify nem os cookies de sessão, e é limpo quando você fecha a aba, cria outra playlist, encerra a sessão ou a prévia expira.',
           ],
           'O Blendify não usa cookies de publicidade nem um sistema próprio de rastreamento de comportamento. O uso do site e o desempenho das páginas são medidos com o Cloudflare Web Analytics, que para isso não usa cookies.',
         ],
@@ -333,7 +339,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
         body: [
           [
             'Seu perfil, os tokens do Spotify, as playlists salvas e os contadores de uso ficam até você removê-los ou excluir sua conta. O Blendify não os expira por calendário.',
-            'As entradas do cache expiram sozinhas: os contadores de limite de uso em cerca de dez minutos, as consultas de catálogo entre 5 e 30 minutos, as sessões do Criar com IA cerca de 30 minutos depois do primeiro pedido, os resultados do Last.fm em até 7 dias. Nada desse cache é gravado em disco.',
+            'As entradas do cache expiram sozinhas: os contadores de limite de uso em cerca de dez minutos, as consultas de catálogo entre 5 e 30 minutos, as sessões do Criar com IA cerca de 30 minutos depois do primeiro pedido, as prévias do modo Spotify cerca de 30 minutos depois de geradas, o resultado de salvar uma prévia cerca de 24 horas depois da última atualização, os resultados do Last.fm em até 7 dias. Nada desse cache é gravado em disco.',
             'Playlists geradas sem login, listas de dispositivos de reprodução e links de transferência nunca são gravados no banco de dados.',
             'Os logs operacionais registram os metadados necessários para operar e diagnosticar o serviço, como qual operação ou URL de provedor foi chamada, o status resultante e quanto tempo levou. Essas URLs são registradas com os termos de busca, nomes e IDs substituídos por marcadores, então não guardam os nomes de artistas, músicas e gêneros consultados. As credenciais de autenticação, os valores do cookie de sessão, os tokens do Spotify e os segredos da aplicação ficam fora desses logs. A Cloudflare e a Railway mantêm os próprios logs de requisições.',
           ],
@@ -347,7 +353,7 @@ export const PRIVACY_POLICY: Record<Locale, PrivacyPolicy> = {
             'Você pode remover playlists da sua biblioteca do Blendify quando quiser e zerar suas estatísticas de uso na página de estatísticas.',
             'Excluir conta, no menu de conta, pede confirmação e então apaga seu registro de usuário do Blendify junto com os tokens do Spotify guardados, suas playlists salvas e seus dados de uso, e encerra sua sessão. Você não precisa escrever para ninguém para fazer isso.',
           ],
-          'Excluir sua conta do Blendify não exclui sua conta do Spotify nem remove as playlists já salvas no Spotify. O Blendify apaga os tokens do Spotify que tinha guardado. Ele não pede ao Spotify para desconectar o Blendify; você remove essa conexão nas configurações da sua conta do Spotify. Se você conectar a mesma conta do Spotify de novo, a biblioteca e as estatísticas anteriores não estão mais lá.',
+          'Excluir sua conta do Blendify não exclui sua conta do Spotify nem remove as playlists já salvas no Spotify. O Blendify apaga os tokens do Spotify que tinha guardado. Ele não pede ao Spotify para desconectar o Blendify; você remove essa conexão nas configurações da sua conta do Spotify. Se você conectar a mesma conta do Spotify de novo, a biblioteca e as estatísticas anteriores não estão mais lá. Excluir sua conta não apaga de imediato as entradas de prévia nem de resultado de salvamento do cache; elas expiram sozinhas nos prazos descritos acima.',
           'As cópias de segurança do banco de dados feitas antes de mudanças anteriores são mantidas fora do serviço em funcionamento para que ele possa ser restaurado após uma falha. Elas não são reescritas, então uma cópia feita antes de você excluir sua conta ainda pode conter dados daquele momento.',
         ],
       },

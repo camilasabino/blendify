@@ -1,56 +1,39 @@
 import { useId } from 'react'
-import { Link } from 'react-router-dom'
-import {
-  Blend,
-  Check,
-  CircleCheck,
-  Clock,
-  Copy,
-  ExternalLink,
-  Library,
-  Plus,
-  RotateCcw,
-  SlidersHorizontal,
-} from 'lucide-react'
+import { Blend, CircleCheck, Clock, RotateCcw } from 'lucide-react'
 import type {
   GeneratedPlaylistDto,
   GenerationProgress,
-  PlaylistDetail,
   PlaylistTransferDto,
 } from '@blendify/contracts'
 import { LastFmAttribution } from '@/components/brand/lastfm-attribution'
 import { SpotifyLimitExplanation } from '@/components/brand/spotify-limit-explanation'
 import { SpotifyLogo } from '@/components/brand/spotify-mark'
-import { CoverErrorNotice } from '@/components/playlist/generation-form-shared'
 import { GeneratedTrackList } from '@/components/playlist/generated-track-list'
 import {
   guestArtwork,
   phaseMessageKey,
   type GuestArtwork,
-  type RunFailureKind,
   type RunFailureRecovery,
   type RunFailureView,
 } from '@/components/playlist/generation-result-helpers'
-import { PlaylistPreview } from '@/components/playlist/playlist-preview'
+import {
+  FillStatusMessages,
+  NextStepActions,
+} from '@/components/playlist/generation-result-parts'
+import { resultMeta } from '@/components/playlist/generation-result-helpers'
+import {
+  SpotifyPreviewResult,
+  type SpotifyPreviewResultProps,
+} from '@/components/playlist/spotify-preview-result'
 import { TransferAction } from '@/components/playlist/transfer-action'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { useConnectSpotify } from '@/hooks/use-connect-spotify'
 import { useGenerationFill } from '@/hooks/use-generation-feedback'
 import { useT } from '@/i18n/use-t'
 import type { MessageKey } from '@/i18n/messages'
 import type { AppMode } from '@/lib/capabilities'
-import { readPersistToLibraryPreference } from '@/lib/persist-to-library-preference'
-import {
-  outcomeDurationMs,
-  outcomeTrackCount,
-  type GenerationOutcome,
-} from '@/lib/playlist-generation'
-import { formatSongCount } from '@/lib/song-count'
-import {
-  cn,
-  focusRing,
-  formatListeningTime,
-} from '@/lib/utils'
+import type { GenerationOutcome } from '@/lib/playlist-generation'
+import { cn, focusRing } from '@/lib/utils'
 
 function songProgressLabel(
   progress: GenerationProgress,
@@ -103,26 +86,12 @@ function readyKey(mode: AppMode): MessageKey {
   return mode === 'guest' ? 'create.readyGuest' : 'create.ready'
 }
 
-function failedTitleKey(mode: AppMode, kind: RunFailureKind): MessageKey {
-  switch (kind) {
-    case 'connection_lost':
-      return 'create.uncertainTitle'
-    case 'unconfirmed':
-      return 'create.unconfirmedTitle'
-    case 'incomplete':
-      return 'create.incompleteTitle'
-    case 'failed':
-      return mode === 'guest' ? 'create.failedTitleGuest' : 'create.failedTitle'
-  }
+function failedTitleKey(mode: AppMode): MessageKey {
+  return mode === 'guest' ? 'create.failedTitleGuest' : 'create.failedTitle'
 }
 
 function leaveNoteKey(mode: AppMode): MessageKey {
-  if (mode === 'guest') {
-    return 'create.leaveNoteGuest'
-  }
-  return readPersistToLibraryPreference()
-    ? 'create.leaveNoteLibrary'
-    : 'create.leaveNoteSpotify'
+  return mode === 'guest' ? 'create.leaveNoteGuest' : 'spotifyPreview.leaveNote'
 }
 
 function GeneratingState({
@@ -170,77 +139,6 @@ function GeneratingState({
   )
 }
 
-function FillStatusMessages({
-  trackCount,
-  requestedTrackCount,
-  isNearCompleteFill,
-  isShortFill,
-}: Readonly<{
-  trackCount: number
-  requestedTrackCount: number
-  isNearCompleteFill: boolean
-  isShortFill: boolean
-}>) {
-  const t = useT()
-  if (isNearCompleteFill) {
-    return (
-      <p className="mt-2 text-sm text-cream-300">
-        {t('create.nearCompleteTracks', {
-          count: trackCount,
-          requested: requestedTrackCount,
-        })}
-      </p>
-    )
-  }
-  if (isShortFill) {
-    return (
-      <p className="mt-2 text-sm text-warning">
-        {t('create.partialTracks', {
-          count: trackCount,
-          requested: requestedTrackCount,
-        })}
-      </p>
-    )
-  }
-  return null
-}
-
-function ResultActions({
-  spotifyUrl,
-  copied,
-  onCopy,
-}: Readonly<{
-  spotifyUrl: string | null | undefined
-  copied: boolean
-  onCopy: (url: string) => void
-}>) {
-  const t = useT()
-  if (!spotifyUrl) {
-    return <p className="text-sm text-cream-400">{t('create.linkPending')}</p>
-  }
-  return (
-    <>
-      <a
-        href={spotifyUrl}
-        target="_blank"
-        rel="noreferrer"
-        className={cn(buttonVariants())}
-      >
-        <ExternalLink aria-hidden className="size-4" />
-        {t('create.openSpotify')}
-      </a>
-      <Button type="button" variant="secondary" onClick={() => onCopy(spotifyUrl)}>
-        {copied ? (
-          <Check aria-hidden className="size-4" />
-        ) : (
-          <Copy aria-hidden className="size-4" />
-        )}
-        {copied ? t('create.copied') : t('create.copyLink')}
-      </Button>
-    </>
-  )
-}
-
 function ReconnectAction() {
   const t = useT()
   const connectSpotify = useConnectSpotify()
@@ -251,34 +149,11 @@ function ReconnectAction() {
   )
 }
 
-function CreateNewAnywayAction({ onCreateNew }: Readonly<{ onCreateNew: () => void }>) {
-  const t = useT()
-  const hintId = useId()
-  return (
-    <div className="space-y-2">
-      <Button
-        type="button"
-        variant="secondary"
-        onClick={onCreateNew}
-        aria-describedby={hintId}
-      >
-        <Plus aria-hidden className="size-4" />
-        {t('create.createNewAnyway')}
-      </Button>
-      <p id={hintId} className="text-sm text-cream-400">
-        {t('create.createNewAnywayHint')}
-      </p>
-    </div>
-  )
-}
-
 function GenerationErrorActions({
   recovery,
-  playlistUrl,
   onRetry,
 }: Readonly<{
   recovery: RunFailureRecovery
-  playlistUrl: string | null
   onRetry: () => void
 }>) {
   const t = useT()
@@ -290,25 +165,6 @@ function GenerationErrorActions({
           {t('common.retry')}
         </Button>
       )
-    case 'open_library':
-      return (
-        <Link to="/app/library" className={buttonVariants({ variant: 'secondary' })}>
-          <Library aria-hidden className="size-4" />
-          {t('create.openLibrary')}
-        </Link>
-      )
-    case 'open_playlist':
-      return playlistUrl ? (
-        <a
-          href={playlistUrl}
-          target="_blank"
-          rel="noreferrer"
-          className={buttonVariants({ variant: 'secondary' })}
-        >
-          <ExternalLink aria-hidden className="size-4" />
-          {t('create.openSpotify')}
-        </a>
-      ) : null
     case 'reconnect':
       return <ReconnectAction />
     case 'none':
@@ -319,11 +175,9 @@ function GenerationErrorActions({
 function GenerationErrorState({
   failure,
   onRetry,
-  onCreateNew,
 }: Readonly<{
   failure: RunFailureView
   onRetry: () => void
-  onCreateNew: () => void
 }>) {
   return (
     <div className="space-y-4">
@@ -331,105 +185,7 @@ function GenerationErrorState({
         {failure.message}
       </p>
       {failure.explainsSpotifyLimit ? <SpotifyLimitExplanation /> : null}
-      <GenerationErrorActions
-        recovery={failure.recovery}
-        playlistUrl={failure.playlistUrl}
-        onRetry={onRetry}
-      />
-      {failure.offersNewCreation ? <CreateNewAnywayAction onCreateNew={onCreateNew} /> : null}
-    </div>
-  )
-}
-
-function NextStepActions({
-  onAdjust,
-  onCreateAnother,
-}: Readonly<{
-  onAdjust: () => void
-  onCreateAnother: () => void
-}>) {
-  const t = useT()
-  return (
-    <div className="flex flex-wrap gap-2 border-t border-divider pt-4">
-      <Button type="button" variant="secondary" size="sm" onClick={onCreateAnother}>
-        <Plus aria-hidden className="size-3.5" />
-        {t('create.createAnother')}
-      </Button>
-      <Button type="button" variant="ghost" size="sm" onClick={onAdjust}>
-        <SlidersHorizontal aria-hidden className="size-3.5" />
-        {t('create.adjustAndRecreate')}
-      </Button>
-    </div>
-  )
-}
-
-function resultMeta(
-  result: GenerationOutcome,
-  t: ReturnType<typeof useT>,
-): string {
-  const durationMs = outcomeDurationMs(result)
-  return [
-    formatSongCount(outcomeTrackCount(result), t),
-    durationMs > 0 ? formatListeningTime(durationMs) : null,
-  ]
-    .filter(Boolean)
-    .join(' · ')
-}
-
-function ReadyResult({
-  outcome,
-  result,
-  requestedTrackCount,
-  copied,
-  onCopy,
-  onAdjust,
-  onCreateAnother,
-}: Readonly<{
-  outcome: GenerationOutcome
-  result: PlaylistDetail
-  requestedTrackCount: number
-  copied: boolean
-  onCopy: (url: string) => void
-  onAdjust: () => void
-  onCreateAnother: () => void
-}>) {
-  const t = useT()
-  const { isNearCompleteFill, isShortFill } = useGenerationFill(
-    result.trackCount,
-    requestedTrackCount,
-  )
-
-  return (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <div>
-          <p className="text-sm text-cream-300">{resultMeta(outcome, t)}</p>
-          <FillStatusMessages
-            trackCount={result.trackCount}
-            requestedTrackCount={requestedTrackCount}
-            isNearCompleteFill={isNearCompleteFill}
-            isShortFill={isShortFill}
-          />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <ResultActions
-            spotifyUrl={result.spotifyUrl}
-            copied={copied}
-            onCopy={onCopy}
-          />
-        </div>
-        <NextStepActions
-          onAdjust={onAdjust}
-          onCreateAnother={onCreateAnother}
-        />
-        <LastFmAttribution />
-      </div>
-      <PlaylistPreview
-        mode="full"
-        tracks={result.tracks}
-        spotifyId={result.spotifyId}
-        spotifyUrl={result.spotifyUrl}
-      />
+      <GenerationErrorActions recovery={failure.recovery} onRetry={onRetry} />
     </div>
   )
 }
@@ -540,48 +296,35 @@ function GuestReadyResult({
   )
 }
 
-function ResultBody({
+export type SpotifyPanelBinding = Readonly<
+  Pick<SpotifyPreviewResultProps, 'session' | 'actions' | 'focusOnArrival'>
+>
+
+function GuestResultBody({
   outcome,
   requestedTrackCount,
   preparedTransfer,
   onTransferPrepared,
-  copied,
-  onCopy,
   onRetry,
   onAdjust,
   onCreateAnother,
 }: Readonly<{
-  outcome: GenerationOutcome
+  outcome: GenerationOutcome & { mode: 'guest' }
   requestedTrackCount: number
   preparedTransfer: PlaylistTransferDto | null
   onTransferPrepared?: (transfer: PlaylistTransferDto) => void
-  copied: boolean
-  onCopy: (url: string) => void
   onRetry: () => void
   onAdjust: () => void
   onCreateAnother: () => void
 }>) {
-  if (outcome.mode === 'guest') {
-    return (
-      <GuestReadyResult
-        outcome={outcome}
-        playlist={outcome.playlist}
-        requestedTrackCount={requestedTrackCount}
-        preparedTransfer={preparedTransfer}
-        onTransferPrepared={onTransferPrepared}
-        onRegenerate={onRetry}
-        onAdjust={onAdjust}
-        onCreateAnother={onCreateAnother}
-      />
-    )
-  }
   return (
-    <ReadyResult
+    <GuestReadyResult
       outcome={outcome}
-      result={outcome.playlist}
+      playlist={outcome.playlist}
       requestedTrackCount={requestedTrackCount}
-      copied={copied}
-      onCopy={onCopy}
+      preparedTransfer={preparedTransfer}
+      onTransferPrepared={onTransferPrepared}
+      onRegenerate={onRetry}
       onAdjust={onAdjust}
       onCreateAnother={onCreateAnother}
     />
@@ -594,17 +337,16 @@ export function GenerationResultPanel({
   result,
   progress,
   failure,
-  coverError,
   requestedTrackCount,
   workingTitleKey,
   workingHintKey,
   requestStarted = false,
   preparedTransfer = null,
   onTransferPrepared,
+  spotify = null,
   copied,
   onCopy,
   onRetry,
-  onCreateNew,
   onAdjust,
   onCreateAnother,
 }: Readonly<{
@@ -613,17 +355,16 @@ export function GenerationResultPanel({
   result: GenerationOutcome | null
   progress: GenerationProgress | null
   failure: RunFailureView | null
-  coverError: string | null
   requestedTrackCount: number
   workingTitleKey: MessageKey
   workingHintKey: MessageKey
   requestStarted?: boolean
   preparedTransfer?: PlaylistTransferDto | null
   onTransferPrepared?: (transfer: PlaylistTransferDto) => void
+  spotify?: SpotifyPanelBinding | null
   copied: boolean
   onCopy: (url: string) => void
   onRetry: () => void
-  onCreateNew: () => void
   onAdjust: () => void
   onCreateAnother: () => void
 }>) {
@@ -636,20 +377,25 @@ export function GenerationResultPanel({
 
   const showError = !isGenerating && failure != null
   const showResult = !isGenerating && !showError && result != null
+  const spotifyResult =
+    showResult && result.mode === 'spotify' && spotify !== null ? result : null
+  const guestResult = showResult && result.mode === 'guest' ? result : null
   const readyLabel = t(readyKey(result?.mode ?? mode))
-  let title = result?.playlist.name ?? readyLabel
+  let title = readyLabel
+  if (guestResult) {
+    title = guestResult.playlist.name
+  }
   if (isGenerating) {
     title = t(workingTitleKey)
-  }
-  else if (showError) {
-    title = t(failedTitleKey(mode, failure.kind))
+  } else if (showError) {
+    title = t(failedTitleKey(mode))
   }
 
   let announcement = ''
   if (isGenerating) {
     announcement = progressAnnouncement(progress, workingHintKey, t)
-  } else if (showResult) {
-    announcement = `${readyLabel}: ${result.playlist.name}. ${resultMeta(result, t)}`
+  } else if (guestResult) {
+    announcement = `${readyLabel}: ${guestResult.playlist.name}. ${resultMeta(guestResult, t)}`
   }
 
   return (
@@ -662,24 +408,42 @@ export function GenerationResultPanel({
           : 'border-accent-line/50 from-amber-500/[0.12]',
       )}
     >
-      <div className="space-y-1">
-        {showResult ? (
-          <p className="flex items-center gap-1.5 text-eyebrow text-accent-fg">
-            <CircleCheck aria-hidden className="size-3.5" />
-            {readyLabel}
-          </p>
-        ) : null}
-        <h2
-          id={titleId}
-          className={cn(
-            'font-display font-semibold text-cream-50',
-            showResult ? 'break-words text-xl sm:text-2xl' : 'text-lg',
-          )}
-        >
-          {title}
-        </h2>
-      </div>
-      <output className="sr-only">{announcement}</output>
+      {spotifyResult && spotify ? (
+        <SpotifyPreviewResult
+          titleId={titleId}
+          outcome={spotifyResult}
+          session={spotify.session}
+          actions={spotify.actions}
+          requestedTrackCount={requestedTrackCount}
+          focusOnArrival={spotify.focusOnArrival}
+          copied={copied}
+          onCopy={onCopy}
+          onGenerateAgain={onRetry}
+          onAdjust={onAdjust}
+          onCreateAnother={onCreateAnother}
+        />
+      ) : (
+        <>
+          <div className="space-y-1">
+            {guestResult ? (
+              <p className="flex items-center gap-1.5 text-eyebrow text-accent-fg">
+                <CircleCheck aria-hidden className="size-3.5" />
+                {readyLabel}
+              </p>
+            ) : null}
+            <h2
+              id={titleId}
+              className={cn(
+                'font-display font-semibold text-cream-50',
+                guestResult ? 'break-words text-xl sm:text-2xl' : 'text-lg',
+              )}
+            >
+              {title}
+            </h2>
+          </div>
+          <output className="sr-only">{announcement}</output>
+        </>
+      )}
       {isGenerating ? (
         <GeneratingState
           mode={mode}
@@ -688,18 +452,13 @@ export function GenerationResultPanel({
           requestStarted={requestStarted}
         />
       ) : null}
-      {showError ? (
-        <GenerationErrorState failure={failure} onRetry={onRetry} onCreateNew={onCreateNew} />
-      ) : null}
-      <CoverErrorNotice message={coverError} />
-      {showResult ? (
-        <ResultBody
-          outcome={result}
+      {showError ? <GenerationErrorState failure={failure} onRetry={onRetry} /> : null}
+      {guestResult ? (
+        <GuestResultBody
+          outcome={guestResult}
           requestedTrackCount={requestedTrackCount}
           preparedTransfer={preparedTransfer}
           onTransferPrepared={onTransferPrepared}
-          copied={copied}
-          onCopy={onCopy}
           onRetry={onRetry}
           onAdjust={onAdjust}
           onCreateAnother={onCreateAnother}

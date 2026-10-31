@@ -2,6 +2,9 @@ import type {
   GeneratedPlaylistDto,
   GenerationProgress,
   PlaylistDetail,
+  SpotifyDestinationDto,
+  SpotifyPreviewDto,
+  SpotifyPreviewStateDto,
 } from '@blendify/contracts'
 
 const jazzGeneration: GeneratedPlaylistDto['generation'] = {
@@ -70,4 +73,39 @@ export const spotifyJazzPlaylist: PlaylistDetail = {
   updatedAt: '2026-09-25T12:00:00.000Z',
   tracks: [jazzTrack],
   generation: jazzGeneration,
+}
+
+export const PREVIEW_ID = 'AAAAAAAAAAAAAAAAAAAAAA'
+export const SECOND_PREVIEW_ID = 'BBBBBBBBBBBBBBBBBBBBBB'
+
+export function jazzPreview(
+  overrides: Partial<SpotifyPreviewDto> = {},
+): SpotifyPreviewDto {
+  return {
+    previewId: PREVIEW_ID,
+    expiresAt: '2099-01-01T00:30:00.000Z',
+    playlist: {
+      name: guestJazzPlaylist.name,
+      description: guestJazzPlaylist.description,
+      generation: guestJazzPlaylist.generation,
+      seeds: guestJazzPlaylist.seeds,
+      tracks: guestJazzPlaylist.tracks,
+    },
+    ...overrides,
+  }
+}
+
+export function previewState(
+  destination: SpotifyDestinationDto | null,
+  overrides: Partial<SpotifyPreviewStateDto> = {},
+): SpotifyPreviewStateDto {
+  const { previewId, expiresAt, playlist } = jazzPreview()
+  return { previewId, expiresAt, playlist, destination, ...overrides }
+}
+
+export const publishedDestination: SpotifyDestinationDto = {
+  status: 'published',
+  spotifyUrl: 'https://open.spotify.com/playlist/playlist-1',
+  spotifyId: 'playlist-1',
+  savedToLibrary: true,
 }

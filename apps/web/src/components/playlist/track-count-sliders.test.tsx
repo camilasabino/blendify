@@ -15,10 +15,7 @@ import {
   testUser,
   type PendingNdjsonStream,
 } from '@/test/app-harness'
-import {
-  guestJazzPlaylist,
-  spotifyJazzPlaylist,
-} from '@/test/playlist-fixtures'
+import { guestJazzPlaylist, jazzPreview } from '@/test/playlist-fixtures'
 
 vi.mock('@/lib/playlist-cover', () => ({
   renderPlaylistCoverBase64: vi.fn().mockResolvedValue('cover-data'),
@@ -306,8 +303,8 @@ describe('Mix track-count slider', () => {
       'GET /api/genres': () => jsonResponse({ genres: [genres[0]] }),
       'POST /api/generate/mix': () =>
         ndjsonResponse({ type: 'result', playlist: guestJazzPlaylist }),
-      'POST /api/playlists/mix': () =>
-        ndjsonResponse({ type: 'result', playlist: spotifyJazzPlaylist }),
+      'POST /api/previews/mix': () =>
+        ndjsonResponse({ type: 'result', playlist: jazzPreview() }),
       'GET /api/player/devices': () => jsonResponse({ devices: [] }),
     })
     const user = userEvent.setup()
@@ -327,20 +324,18 @@ describe('Mix track-count slider', () => {
     await user.click(screen.getByRole('radio', { name: 'Genres' }))
     setSlider('Songs per genre', 12)
     await user.click(await screen.findByRole('button', { name: 'Jazz' }))
-    expect(screen.getByRole('heading', { name: 'Size and cover' })).toBeVisible()
-    await user.click(screen.getByRole('button', { name: 'Create playlist' }))
-    await screen.findByText('Playlist ready')
+    expect(screen.getByRole('heading', { name: 'Size' })).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Generate preview' }))
+    await screen.findByText('Preview · not saved yet')
 
     const posts = calls.filter((call) => call.method === 'POST')
     expect(posts[0].url).toBe('/api/generate/mix')
     expect(posts[0].body).toMatchObject({ tracksPerSeed: 12 })
     expect(posts[0].body).not.toHaveProperty('persistToLibrary')
-    expect(posts[1].url).toBe('/api/playlists/mix')
-    expect(posts[1].body).toMatchObject({
-      tracksPerSeed: 12,
-      persistToLibrary: true,
-      coverImageBase64: 'cover-data',
-    })
+    expect(posts[1].url).toBe('/api/previews/mix')
+    expect(posts[1].body).toMatchObject({ tracksPerSeed: 12 })
+    expect(posts[1].body).not.toHaveProperty('persistToLibrary')
+    expect(posts[1].body).not.toHaveProperty('coverImageBase64')
   })
 
   it.each([

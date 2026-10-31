@@ -51,8 +51,8 @@ popularity preference, order, track budget), so a result can be reproduced and r
 |---|---|---|
 | Account | None | Connect Spotify (limited to authorized accounts while the Spotify app is in Development Mode) |
 | Mix, Discover, Create with AI | Yes | Yes |
-| Result | Temporary preview | Published to Spotify as a private playlist |
-| Destination | Optional transfer to Spotify or another service through [Soundiiz](https://soundiiz.com) | Direct publish, with an optional Blendify cover |
+| Result | Temporary preview | Temporary preview, saved to Spotify as a private playlist only when you choose Save to Spotify |
+| Destination | Optional transfer to Spotify or another service through [Soundiiz](https://soundiiz.com) | Explicit save, with the title you edit and an optional Blendify cover |
 | Library, Stats, in-app playback | No | Yes (playback needs Spotify Premium) |
 
 ## Create with AI

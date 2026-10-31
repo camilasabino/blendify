@@ -1,6 +1,4 @@
-import { QueryClient } from '@tanstack/react-query'
 import {
-  recreateUncertainPlaylistRun,
   rerunPlaylistRun,
   startPlaylistRun,
 } from '@/lib/playlist-run-coordinator'
@@ -10,12 +8,11 @@ import {
 } from '@/stores/playlist-run-store'
 import {
   jsonResponse,
-  ndjsonResponse,
   pendingNdjsonResponse,
   stubApi,
   type PendingNdjsonStream,
 } from '@/test/app-harness'
-import { guestJazzPlaylist, spotifyJazzPlaylist } from '@/test/playlist-fixtures'
+import { guestJazzPlaylist, jazzPreview } from '@/test/playlist-fixtures'
 
 const request: PlaylistRunSpec['request'] = {
   kind: 'genre_mix',
@@ -27,14 +24,20 @@ const request: PlaylistRunSpec['request'] = {
   orderMode: 'random',
 }
 
-const spotifySpec: PlaylistRunSpec = {
-  feature: 'mix',
+const spotifySpec: PlaylistRunSpec = { feature: 'mix', mode: 'spotify', request }
+const discoverSpec: PlaylistRunSpec = {
+  feature: 'discover',
   mode: 'spotify',
-  request,
-  publication: { persistToLibrary: true },
-  coverFailed: false,
+  request: {
+    kind: 'discover_artist',
+    artistId: 'artist-1',
+    artist: { id: 'artist-1', name: 'Sade', imageUrl: null },
+    description: '',
+    targetTrackCount: 30,
+    popularity: 'balanced',
+    orderMode: 'random',
+  },
 }
-
 const guestSpec: PlaylistRunSpec = { ...spotifySpec, mode: 'guest' }
 
 function phase() {
@@ -59,16 +62,14 @@ afterEach(() => {
 })
 
 describe('playlist run coordinator', () => {
-  it('runs a Spotify run to success and invalidates Library and Stats exactly once', async () => {
+  it('runs a Spotify generation to a preview without any publication', async () => {
     const streams: PendingNdjsonStream[] = []
-    stubApi({ 'POST /api/playlists/mix': pendingRoute(streams) })
-    const queryClient = new QueryClient()
-    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const { calls } = stubApi({ 'POST /api/previews/mix': pendingRoute(streams) })
 
-    expect(startPlaylistRun(spotifySpec, queryClient)).toBe(true)
+    expect(startPlaylistRun(spotifySpec)).toBe('started')
     streams[0].push({
       type: 'progress',
-      phase: 'publishing',
+      phase: 'matching_tracks',
       current: 1,
       total: 1,
       percent: 95,
@@ -79,39 +80,58 @@ describe('playlist run coordinator', () => {
       progress: { percent: 95 },
     })
 
-    streams[0].push({ type: 'result', playlist: spotifyJazzPlaylist })
+    const stored = jazzPreview()
+    streams[0].push({ type: 'result', playlist: stored })
     streams[0].close()
     await settle()
 
     expect(phase()).toBe('succeeded')
-    expect(invalidate.mock.calls).toEqual([
-      [{ queryKey: ['usage-stats'] }],
-      [{ queryKey: ['playlists'] }],
+    expect(usePlaylistRunStore.getState().run?.status).toMatchObject({
+      outcome: { mode: 'spotify', preview: stored },
+      spotify: { save: { phase: 'idle' } },
+    })
+    expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
+      'POST /api/previews/mix',
     ])
   })
 
-  it('does not invalidate queries for a Guest result', async () => {
+  it('sends only the generation request, never publication fields', async () => {
+    const streams: PendingNdjsonStream[] = []
+    const { calls } = stubApi({ 'POST /api/previews/mix': pendingRoute(streams) })
+
+    startPlaylistRun(spotifySpec)
+
+    expect(calls[0].body).toEqual(request)
+  })
+
+  it('uses the Discover preview endpoint for Discover runs', async () => {
+    const streams: PendingNdjsonStream[] = []
+    const { calls } = stubApi({ 'POST /api/previews/discover': pendingRoute(streams) })
+
+    startPlaylistRun(discoverSpec)
+
+    expect(calls.map((call) => call.url)).toEqual(['/api/previews/discover'])
+  })
+
+  it('uses the Guest endpoint for Guest runs', async () => {
     const streams: PendingNdjsonStream[] = []
     stubApi({ 'POST /api/generate/mix': pendingRoute(streams) })
-    const queryClient = new QueryClient()
-    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
 
-    startPlaylistRun(guestSpec, queryClient)
+    startPlaylistRun(guestSpec)
     streams[0].push({ type: 'result', playlist: guestJazzPlaylist })
     streams[0].close()
     await settle()
 
     expect(phase()).toBe('succeeded')
-    expect(invalidate).not.toHaveBeenCalled()
+    expect(usePlaylistRunStore.getState().run?.status).toMatchObject({ spotify: null })
   })
 
   it('refuses to start while a run is active without issuing a second request', async () => {
     const streams: PendingNdjsonStream[] = []
-    const { calls } = stubApi({ 'POST /api/playlists/mix': pendingRoute(streams) })
-    const queryClient = new QueryClient()
+    const { calls } = stubApi({ 'POST /api/previews/mix': pendingRoute(streams) })
 
-    expect(startPlaylistRun(spotifySpec, queryClient)).toBe(true)
-    expect(startPlaylistRun(spotifySpec, queryClient)).toBe(false)
+    expect(startPlaylistRun(spotifySpec)).toBe('started')
+    expect(startPlaylistRun(spotifySpec)).toBe('blocked')
     await settle()
 
     expect(calls.filter((call) => call.method === 'POST')).toHaveLength(1)
@@ -119,25 +139,21 @@ describe('playlist run coordinator', () => {
 
   it('aborts the request and skips every side effect after a discard', async () => {
     const streams: PendingNdjsonStream[] = []
-    stubApi({ 'POST /api/playlists/mix': pendingRoute(streams) })
-    const queryClient = new QueryClient()
-    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    stubApi({ 'POST /api/previews/mix': pendingRoute(streams) })
 
-    startPlaylistRun(spotifySpec, queryClient)
+    startPlaylistRun(spotifySpec)
     usePlaylistRunStore.getState().discard()
     await settle()
 
     expect(streams[0].signal?.aborted).toBe(true)
     expect(usePlaylistRunStore.getState().run).toBeNull()
-    expect(invalidate).not.toHaveBeenCalled()
   })
 
   it('marks a typed backend error as failed and lets the same request run again', async () => {
     const streams: PendingNdjsonStream[] = []
-    const { calls } = stubApi({ 'POST /api/playlists/mix': pendingRoute(streams) })
-    const queryClient = new QueryClient()
+    const { calls } = stubApi({ 'POST /api/previews/mix': pendingRoute(streams) })
 
-    startPlaylistRun(spotifySpec, queryClient)
+    startPlaylistRun(spotifySpec)
     streams[0].push({
       type: 'error',
       statusCode: 502,
@@ -148,7 +164,7 @@ describe('playlist run coordinator', () => {
     await settle()
     expect(phase()).toBe('failed')
 
-    expect(rerunPlaylistRun(queryClient)).toBe(true)
+    expect(rerunPlaylistRun()).toBe(true)
     await settle()
 
     const posts = calls.filter((call) => call.method === 'POST')
@@ -161,202 +177,141 @@ describe('playlist run coordinator', () => {
     ['a dropped connection', () => Promise.reject(new TypeError('network error'))],
     [
       'a stream that ends without a result',
-      () => Promise.resolve(new Response('', { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } })),
-    ],
-  ])('treats %s as an uncertain Spotify outcome and never offers a rerun', async (_label, respond) => {
-    stubApi({ 'POST /api/playlists/mix': respond })
-    const queryClient = new QueryClient()
-
-    startPlaylistRun(spotifySpec, queryClient)
-    await settle()
-
-    expect(phase()).toBe('uncertain')
-    expect(rerunPlaylistRun(queryClient)).toBe(false)
-  })
-
-  it('creates again after a write whose response never arrived only through the explicit recreate', async () => {
-    const providerWrites: unknown[] = []
-    stubApi({
-      'POST /api/playlists/mix': (call) => {
-        providerWrites.push(call.body)
-        return providerWrites.length === 1
-          ? ndjsonResponse({ type: 'progress', phase: 'publishing', current: 1, total: 1, percent: 95 })
-          : ndjsonResponse({ type: 'result', playlist: spotifyJazzPlaylist })
-      },
-    })
-    const queryClient = new QueryClient()
-
-    startPlaylistRun(spotifySpec, queryClient)
-    await settle()
-    expect(phase()).toBe('uncertain')
-    expect(rerunPlaylistRun(queryClient)).toBe(false)
-    await settle()
-    expect(providerWrites).toHaveLength(1)
-
-    expect(recreateUncertainPlaylistRun(queryClient)).toBe(true)
-    await settle()
-
-    expect(providerWrites).toHaveLength(2)
-    expect(providerWrites[1]).toEqual(providerWrites[0])
-    expect(phase()).toBe('succeeded')
-  })
-
-  it('treats the same interruption as an ordinary failure for a Guest run', async () => {
-    stubApi({
-      'POST /api/generate/mix': () => Promise.reject(new TypeError('network error')),
-    })
-
-    startPlaylistRun(guestSpec, new QueryClient())
-    await settle()
-
-    expect(phase()).toBe('failed')
-  })
-
-  it('keeps an HTTP error response a plain failure even in Spotify Mode', async () => {
-    stubApi({
-      'POST /api/playlists/mix': () =>
-        jsonResponse({ statusCode: 500, code: 'INTERNAL_ERROR', message: 'nope' }, 500),
-    })
-
-    startPlaylistRun(spotifySpec, new QueryClient())
-    await settle()
-
-    expect(phase()).toBe('failed')
-  })
-
-  async function failWith(event: Record<string, unknown>) {
-    const streams: PendingNdjsonStream[] = []
-    const api = stubApi({ 'POST /api/playlists/mix': pendingRoute(streams) })
-    const queryClient = new QueryClient()
-    startPlaylistRun(spotifySpec, queryClient)
-    streams[0].push({ type: 'error', ...event })
-    streams[0].close()
-    await settle()
-    return {
-      queryClient,
-      posts: () => api.calls.filter((call) => call.method === 'POST'),
-    }
-  }
-
-  it('keeps an unconfirmed Spotify creation uncertain and never sends it again', async () => {
-    const { queryClient, posts } = await failWith({
-      statusCode: 502,
-      code: 'SPOTIFY_OUTCOME_UNKNOWN',
-      message: 'unknown',
-      details: { operation: 'createPlaylist', category: 'upstream_error', status: 502 },
-    })
-
-    expect(phase()).toBe('uncertain')
-    expect(rerunPlaylistRun(queryClient)).toBe(false)
-    await settle()
-    expect(posts()).toHaveLength(1)
-  })
-
-  it('sends an unconfirmed creation again only through the explicit recreate, with the stored request', async () => {
-    const { queryClient, posts } = await failWith({
-      statusCode: 502,
-      code: 'SPOTIFY_OUTCOME_UNKNOWN',
-      message: 'unknown',
-      details: { operation: 'createPlaylist', category: 'timeout', status: null },
-    })
-
-    expect(recreateUncertainPlaylistRun(queryClient)).toBe(true)
-    await settle()
-
-    expect(posts()).toHaveLength(2)
-    expect(posts()[1].body).toEqual(posts()[0].body)
-    expect(phase()).toBe('active')
-  })
-
-  it.each([
-    [
-      'an incomplete playlist',
-      {
-        statusCode: 502,
-        code: 'SPOTIFY_PLAYLIST_INCOMPLETE',
-        message: 'incomplete',
-        details: {
-          spotifyId: 'created-1',
-          spotifyUrl: 'https://open.spotify.com/playlist/created-1',
-          failedStep: 'add_tracks',
-          tracksAdded: 'unknown',
-        },
-      },
+      () =>
+        Promise.resolve(
+          new Response('', { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } }),
+        ),
     ],
     [
-      'a safe provider failure',
-      {
-        statusCode: 503,
-        code: 'SPOTIFY_UNAVAILABLE',
-        message: 'unavailable',
-        details: { operation: 'searchTracks', category: 'upstream_error', status: 502 },
-      },
+      'an HTTP error response',
+      () => jsonResponse({ statusCode: 500, code: 'INTERNAL_ERROR', message: 'nope' }, 500),
     ],
-  ])('refuses the explicit recreate after %s', async (_label, event) => {
-    const { queryClient, posts } = await failWith(event)
+  ])('treats %s as an ordinary retryable failure because generation writes nothing', async (_label, respond) => {
+    const { calls } = stubApi({ 'POST /api/previews/mix': respond })
 
-    expect(recreateUncertainPlaylistRun(queryClient)).toBe(false)
+    startPlaylistRun(spotifySpec)
     await settle()
-    expect(posts()).toHaveLength(1)
-  })
-
-  it('never recreates a playlist that Spotify already created but did not finish', async () => {
-    const { queryClient, posts } = await failWith({
-      statusCode: 502,
-      code: 'SPOTIFY_PLAYLIST_INCOMPLETE',
-      message: 'incomplete',
-      details: {
-        spotifyId: 'created-1',
-        spotifyUrl: 'https://open.spotify.com/playlist/created-1',
-        failedStep: 'add_tracks',
-        tracksAdded: 'unknown',
-      },
-    })
 
     expect(phase()).toBe('failed')
-    expect(rerunPlaylistRun(queryClient)).toBe(false)
+    expect(rerunPlaylistRun()).toBe(true)
     await settle()
-    expect(posts()).toHaveLength(1)
+    expect(calls.filter((call) => call.method === 'POST')).toHaveLength(2)
   })
 
   it.each([
     ['SPOTIFY_REAUTH_REQUIRED', 401],
     ['SPOTIFY_PERMISSION_DENIED', 403],
   ])('does not rerun after %s', async (code, statusCode) => {
-    const { queryClient, posts } = await failWith({ statusCode, code, message: code })
-
-    expect(phase()).toBe('failed')
-    expect(rerunPlaylistRun(queryClient)).toBe(false)
-    expect(posts()).toHaveLength(1)
-  })
-
-  it.each([
-    [
-      'a creation that never reached Spotify',
-      {
-        statusCode: 503,
-        code: 'SPOTIFY_UNAVAILABLE',
-        message: 'unavailable',
-        details: { operation: 'createPlaylist', category: 'network', status: null },
-      },
-    ],
-    [
-      'a Spotify rate limit',
-      {
-        statusCode: 429,
-        code: 'SPOTIFY_RATE_LIMITED',
-        message: 'rate limited',
-        details: { retryAfterSeconds: 7, retryAfterSource: 'spotify', reason: 'rate_limit' },
-      },
-    ],
-  ])('reruns the same request once after %s', async (_label, event) => {
-    const { queryClient, posts } = await failWith(event)
-
-    expect(phase()).toBe('failed')
-    expect(rerunPlaylistRun(queryClient)).toBe(true)
+    const streams: PendingNdjsonStream[] = []
+    const { calls } = stubApi({ 'POST /api/previews/mix': pendingRoute(streams) })
+    startPlaylistRun(spotifySpec)
+    streams[0].push({ type: 'error', statusCode, code, message: code })
+    streams[0].close()
     await settle()
 
-    expect(posts()).toHaveLength(2)
-    expect(posts()[1].body).toEqual(posts()[0].body)
+    expect(phase()).toBe('failed')
+    expect(rerunPlaylistRun()).toBe(false)
+    expect(calls.filter((call) => call.method === 'POST')).toHaveLength(1)
+  })
+
+  it('reruns a Guest result from the stored request', async () => {
+    const streams: PendingNdjsonStream[] = []
+    const { calls } = stubApi({ 'POST /api/generate/mix': pendingRoute(streams) })
+    startPlaylistRun(guestSpec)
+    streams[0].push({ type: 'result', playlist: guestJazzPlaylist })
+    streams[0].close()
+    await settle()
+
+    expect(rerunPlaylistRun()).toBe(true)
+    await settle()
+
+    expect(calls.filter((call) => call.method === 'POST')).toHaveLength(2)
+  })
+
+  it('does not rerun a live Spotify preview', async () => {
+    const streams: PendingNdjsonStream[] = []
+    const { calls } = stubApi({ 'POST /api/previews/mix': pendingRoute(streams) })
+    startPlaylistRun(spotifySpec)
+    streams[0].push({ type: 'result', playlist: jazzPreview() })
+    streams[0].close()
+    await settle()
+
+    expect(rerunPlaylistRun()).toBe(false)
+    expect(calls.filter((call) => call.method === 'POST')).toHaveLength(1)
+  })
+
+  it('generates an expired preview again from the stored request', async () => {
+    const streams: PendingNdjsonStream[] = []
+    const { calls } = stubApi({ 'POST /api/previews/mix': pendingRoute(streams) })
+    startPlaylistRun(spotifySpec)
+    streams[0].push({ type: 'result', playlist: jazzPreview() })
+    streams[0].close()
+    await settle()
+    const { run } = usePlaylistRunStore.getState()
+    usePlaylistRunStore.getState().expireUnsaved(run!.id)
+
+    expect(rerunPlaylistRun()).toBe(true)
+    await settle()
+
+    const posts = calls.filter((call) => call.method === 'POST')
+    expect(posts).toHaveLength(2)
+    expect(posts[1].body).toEqual(request)
+  })
+
+  describe('replacing an unsaved preview (D4)', () => {
+    async function previewOf(spec: PlaylistRunSpec, route: string) {
+      const streams: PendingNdjsonStream[] = []
+      const api = stubApi({ [`POST ${route}`]: pendingRoute(streams) })
+      startPlaylistRun(spec)
+      streams[0].push({ type: 'result', playlist: jazzPreview() })
+      streams[0].close()
+      await settle()
+      return api
+    }
+
+    it('asks for confirmation before another feature generates over an unsaved preview', async () => {
+      const { calls } = await previewOf(spotifySpec, '/api/previews/mix')
+
+      expect(startPlaylistRun(discoverSpec)).toBe('needs_confirmation')
+
+      expect(calls.filter((call) => call.method === 'POST')).toHaveLength(1)
+      expect(usePlaylistRunStore.getState().run?.spec.feature).toBe('mix')
+    })
+
+    it('replaces the preview once the other feature is confirmed', async () => {
+      await previewOf(spotifySpec, '/api/previews/mix')
+      stubApi({ 'POST /api/previews/discover': pendingRoute([]) })
+
+      expect(startPlaylistRun(discoverSpec, { confirmedReplacement: true })).toBe('started')
+
+      expect(usePlaylistRunStore.getState().run?.spec.feature).toBe('discover')
+    })
+
+    it('needs no confirmation for the same feature and keeps the previous preview meanwhile', async () => {
+      await previewOf(spotifySpec, '/api/previews/mix')
+      stubApi({ 'POST /api/previews/mix': pendingRoute([]) })
+
+      expect(startPlaylistRun(spotifySpec)).toBe('started')
+
+      expect(usePlaylistRunStore.getState().run?.status).toMatchObject({
+        phase: 'active',
+        previous: { outcome: { mode: 'spotify' } },
+      })
+    })
+
+    it('needs no confirmation after the preview expired', async () => {
+      await previewOf(spotifySpec, '/api/previews/mix')
+      usePlaylistRunStore.getState().expireUnsaved(usePlaylistRunStore.getState().run!.id)
+      stubApi({ 'POST /api/previews/discover': pendingRoute([]) })
+
+      expect(startPlaylistRun(discoverSpec)).toBe('started')
+    })
+
+    it('never asks Guest runs for confirmation', async () => {
+      stubApi({ 'POST /api/generate/discover': pendingRoute([]) })
+      usePlaylistRunStore.getState().restore(guestSpec, { mode: 'guest', playlist: guestJazzPlaylist }, null)
+
+      expect(startPlaylistRun({ ...discoverSpec, mode: 'guest' })).toBe('started')
+    })
   })
 })

@@ -11,7 +11,7 @@ import {
   stubApi,
   testUser,
 } from '@/test/app-harness'
-import { spotifyJazzPlaylist } from '@/test/playlist-fixtures'
+import { jazzPreview } from '@/test/playlist-fixtures'
 
 function LocationProbe() {
   const location = useLocation()
@@ -363,10 +363,10 @@ describe('Spotify Mode routing', () => {
     renderApp('/app/discover')
 
     expect(
-      await screen.findByRole('heading', { name: 'Size and cover' }),
+      await screen.findByRole('heading', { name: 'Size' }),
     ).toBeVisible()
     expect(
-      screen.getByRole('button', { name: 'Create playlist' }),
+      screen.getByRole('button', { name: 'Generate preview' }),
     ).toBeInTheDocument()
   })
 
@@ -457,7 +457,7 @@ describe('Spotify Mode routing', () => {
     stubApi({
       'GET /api/genres': () =>
         jsonResponse({ genres: [{ id: 'jazz', name: 'Jazz' }] }),
-      'POST /api/playlists/mix': () => pending.response,
+      'POST /api/previews/mix': () => pending.response,
       'POST /api/auth/logout': () => jsonResponse({ ok: true }),
     })
     const { queryClient } = renderApp('/app/mix')
@@ -465,8 +465,8 @@ describe('Spotify Mode routing', () => {
 
     await user.click(screen.getByRole('radio', { name: 'Genres' }))
     await user.click(await screen.findByRole('button', { name: /Jazz/ }))
-    await user.click(screen.getByRole('button', { name: 'Create playlist' }))
-    await screen.findByText('Creating your playlist')
+    await user.click(screen.getByRole('button', { name: 'Generate preview' }))
+    await screen.findByText('Generating your preview')
 
     await user.click(
       screen.getByRole('button', { name: 'Account menu: Camila' }),
@@ -478,7 +478,7 @@ describe('Spotify Mode routing', () => {
 
     // The generation resolves after logout already completed; its result
     // must not resurrect the authenticated UI or update stale caches.
-    pending.push({ type: 'result', playlist: spotifyJazzPlaylist })
+    pending.push({ type: 'result', playlist: jazzPreview() })
     pending.close()
     await Promise.resolve()
 

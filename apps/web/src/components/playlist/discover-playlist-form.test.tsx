@@ -13,7 +13,10 @@ import {
 } from '@/test/app-harness'
 import {
   guestJazzPlaylist,
-  spotifyJazzPlaylist,
+  jazzPreview,
+  PREVIEW_ID,
+  previewState,
+  publishedDestination,
 } from '@/test/playlist-fixtures'
 
 vi.mock('@/lib/playlist-cover', () => ({
@@ -24,106 +27,96 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('DiscoverPlaylistForm cover', () => {
-  it('never builds the custom cover from the Spotify seed artwork', async () => {
+const sadeSearch = () =>
+  jsonResponse({
+    artists: [
+      {
+        id: 'artist-1',
+        name: 'Sade',
+        imageUrl: 'https://i.scdn.co/image/sade',
+        externalUrl: 'https://open.spotify.com/artist/artist-1',
+      },
+    ],
+  })
+
+async function pickSade(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByRole('combobox'), 'sade')
+  await user.click(
+    (await screen.findByRole('option', { name: 'Sade' })).firstElementChild!,
+  )
+}
+
+describe('DiscoverPlaylistForm Spotify preview', () => {
+  beforeEach(() => {
+    usePlaylistRunStore.getState().discard()
+    vi.mocked(renderPlaylistCoverBase64).mockClear()
+  })
+
+  it('generates a preview without saving, then saves once with a cover that never uses the seed artwork', async () => {
     setAuthState(testUser)
     const { calls } = stubApi({
-      'GET /api/artists/search': () =>
-        jsonResponse({
-          artists: [
-            {
-              id: 'artist-1',
-              name: 'Sade',
-              imageUrl: 'https://i.scdn.co/image/sade',
-              externalUrl: 'https://open.spotify.com/artist/artist-1',
-            },
-          ],
-        }),
-      'POST /api/playlists/discover': () =>
-        ndjsonResponse({ type: 'result', playlist: spotifyJazzPlaylist }),
+      'GET /api/artists/search': sadeSearch,
+      'POST /api/previews/discover': () =>
+        ndjsonResponse({ type: 'result', playlist: jazzPreview() }),
+      [`POST /api/previews/${PREVIEW_ID}/save`]: () =>
+        jsonResponse(previewState(publishedDestination)),
       'GET /api/player/devices': () => jsonResponse({ devices: [] }),
     })
     const user = userEvent.setup()
     renderWithProviders(<DiscoverPlaylistForm />, { route: '/app/discover' })
 
-    await user.type(screen.getByRole('combobox'), 'sade')
-    await user.click(
-      (await screen.findByRole('option', { name: 'Sade' })).firstElementChild!,
-    )
-    await user.click(screen.getByRole('button', { name: 'Create playlist' }))
-    await screen.findByText('Playlist ready')
+    expect(screen.queryByText('Add a cover image')).not.toBeInTheDocument()
+    await pickSade(user)
+    await user.click(screen.getByRole('button', { name: 'Generate preview' }))
+    await screen.findByText('Preview · not saved yet')
+
+    const generation = calls.find((call) => call.url === '/api/previews/discover')
+    expect(generation?.body).toMatchObject({ kind: 'discover_artist' })
+    expect(generation?.body).not.toHaveProperty('coverImageBase64')
+    expect(generation?.body).not.toHaveProperty('persistToLibrary')
+    expect(calls.some((call) => call.url.endsWith('/save'))).toBe(false)
+    expect(renderPlaylistCoverBase64).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Save to Spotify' }))
+    await screen.findByRole('heading', { name: 'Saved to Spotify' })
 
     expect(renderPlaylistCoverBase64).toHaveBeenCalledTimes(1)
     const [input] = vi.mocked(renderPlaylistCoverBase64).mock.calls[0]
     expect(input).toEqual({ title: expect.any(String), kind: 'discover' })
     expect(JSON.stringify(input)).not.toContain('i.scdn.co')
-    const request = calls.find((call) => call.method === 'POST')
-    expect(request?.body).toMatchObject({
-      kind: 'discover_artist',
-      coverImageBase64: 'cover-data',
-    })
-  })
-})
-
-describe('DiscoverPlaylistForm after an unconfirmed Spotify creation', () => {
-  beforeEach(() => {
-    usePlaylistRunStore.getState().discard()
+    const saves = calls.filter((call) => call.url.endsWith('/save'))
+    expect(saves).toHaveLength(1)
+    expect(saves[0].body).toMatchObject({ coverImageBase64: 'cover-data', persistToLibrary: true })
   })
 
-  it('keeps the seed, blocks the usual submit and Enter, and creates again only on the explicit action', async () => {
+  it('keeps the seed and offers a plain retry after an interrupted generation', async () => {
     setAuthState(testUser)
-    let creations = 0
+    let attempts = 0
     const { calls } = stubApi({
-      'GET /api/artists/search': () =>
-        jsonResponse({
-          artists: [
-            {
-              id: 'artist-1',
-              name: 'Sade',
-              imageUrl: 'https://i.scdn.co/image/sade',
-              externalUrl: 'https://open.spotify.com/artist/artist-1',
-            },
-          ],
-        }),
-      'POST /api/playlists/discover': () => {
-        creations += 1
-        return creations === 1
-          ? ndjsonResponse({
-              type: 'error',
-              statusCode: 502,
-              code: 'SPOTIFY_OUTCOME_UNKNOWN',
-              message: 'Spotify did not confirm the result of this change.',
-              details: { operation: 'createPlaylist', category: 'timeout', status: null },
-            })
-          : ndjsonResponse({ type: 'result', playlist: spotifyJazzPlaylist })
+      'GET /api/artists/search': sadeSearch,
+      'POST /api/previews/discover': () => {
+        attempts += 1
+        return attempts === 1
+          ? Promise.reject(new TypeError('network error'))
+          : ndjsonResponse({ type: 'result', playlist: jazzPreview() })
       },
       'GET /api/player/devices': () => jsonResponse({ devices: [] }),
     })
     const user = userEvent.setup()
     renderWithProviders(<DiscoverPlaylistForm />, { route: '/app/discover' })
 
-    await user.type(screen.getByRole('combobox'), 'sade')
-    await user.click(
-      (await screen.findByRole('option', { name: 'Sade' })).firstElementChild!,
-    )
-    await user.click(screen.getByRole('button', { name: 'Create playlist' }))
-    await screen.findByRole('heading', { name: 'Couldn’t confirm the playlist' })
+    await pickSade(user)
+    await user.click(screen.getByRole('button', { name: 'Generate preview' }))
+    await screen.findByRole('button', { name: 'Try again' })
 
-    const submit = screen.getByRole('button', { name: 'Create playlist' })
-    expect(submit).toBeDisabled()
     expect(screen.getByText('Sade')).toBeVisible()
-    await user.click(screen.getByRole('radio', { name: 'Artist' }))
-    await user.keyboard('{Enter}')
-    fireEvent.submit(submit.closest('form')!)
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    const posts = () => calls.filter((call) => call.method === 'POST')
-    expect(posts()).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Generate preview' })).toBeEnabled()
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    await screen.findByText('Preview · not saved yet')
 
-    await user.click(screen.getByRole('button', { name: 'Create a new playlist anyway' }))
-    await screen.findByText('Playlist ready')
-
-    expect(posts()).toHaveLength(2)
-    expect(posts()[1].body).toEqual(posts()[0].body)
+    const posts = calls.filter((call) => call.method === 'POST')
+    expect(posts).toHaveLength(2)
+    expect(posts[1].body).toEqual(posts[0].body)
   })
 })
 

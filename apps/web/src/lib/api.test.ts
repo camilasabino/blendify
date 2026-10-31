@@ -7,11 +7,17 @@ import {
   isSpotifyRateLimited,
 } from '@/lib/api'
 import type {
-  CreateDiscoverRequest,
-  CreateMixRequest,
+  GenerateDiscoverRequest,
+  GenerateMixRequest,
   GeneratedPlaylistDto,
   PlaylistDetail,
 } from '@/lib/api'
+import {
+  jazzPreview,
+  PREVIEW_ID,
+  previewState,
+  publishedDestination,
+} from '@/test/playlist-fixtures'
 import type { MessageKey } from '@/i18n/messages'
 
 const t = (key: MessageKey, vars?: Record<string, string | number>) => {
@@ -218,7 +224,6 @@ describe('getApiErrorMessage', () => {
     ['SPOTIFY_PERMISSION_DENIED', 403, 'errors.spotifyPermissionDenied'],
     ['SPOTIFY_REQUEST_REJECTED', 502, 'errors.spotifyRequestRejected'],
     ['SPOTIFY_OUTCOME_UNKNOWN', 502, 'errors.spotifyOutcomeUnknown'],
-    ['SPOTIFY_PLAYLIST_INCOMPLETE', 502, 'errors.spotifyPlaylistIncomplete'],
   ])('localizes Spotify provider failure %s without blaming the chosen song', (code, status, expected) => {
     const message = getApiErrorMessage(
       new ApiError('raw server message', status, {
@@ -287,59 +292,33 @@ describe('getApiErrorMessage', () => {
   })
 })
 
-describe('playlist request contracts', () => {
-  it('sends the canonical artist mix payload', async () => {
-    const fetchMock = stubSuccessfulFetch()
+describe('Spotify preview contracts', () => {
+  const mixRequest: GenerateMixRequest = {
+    kind: 'genre_mix',
+    genreIds: ['jazz'],
+    tracksPerSeed: 12,
+    popularity: 'popular',
+    orderMode: 'artist',
+  }
 
-    await api.createMix({
-      kind: 'artist_mix',
-      artistIds: ['artist-1'],
-      tracksPerSeed: 10,
-      popularity: 'balanced',
-      orderMode: 'random',
-      persistToLibrary: true,
-    })
+  it('sends the canonical mix payload to the preview endpoint without publication fields', async () => {
+    const fetchMock = stubSuccessfulFetch(jazzPreview())
+
+    await api.createMixPreview(mixRequest)
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/playlists/mix'),
+      expect.stringContaining('/api/previews/mix'),
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({
           Accept: 'application/x-ndjson',
           'Content-Type': 'application/json',
         }),
-        body: JSON.stringify({
-          kind: 'artist_mix',
-          artistIds: ['artist-1'],
-          tracksPerSeed: 10,
-          popularity: 'balanced',
-          orderMode: 'random',
-          persistToLibrary: true,
-        }),
+        body: JSON.stringify(mixRequest),
       }),
     )
-  })
-
-  it('sends the canonical genre mix payload', async () => {
-    const fetchMock = stubSuccessfulFetch()
-    const payload: CreateMixRequest = {
-      kind: 'genre_mix',
-      genreIds: ['jazz'],
-      tracksPerSeed: 12,
-      popularity: 'popular',
-      orderMode: 'artist',
-      persistToLibrary: false,
-    }
-
-    await api.createMix(payload)
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/playlists/mix'),
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify(payload),
-      }),
-    )
+    expect(sentBody(fetchMock)).not.toHaveProperty('persistToLibrary')
+    expect(sentBody(fetchMock)).not.toHaveProperty('coverImageBase64')
   })
 
   it.each([
@@ -351,8 +330,7 @@ describe('playlist request contracts', () => {
         targetTrackCount: 30,
         popularity: 'rarities',
         orderMode: 'random',
-        persistToLibrary: true,
-      } satisfies CreateDiscoverRequest,
+      } satisfies GenerateDiscoverRequest,
     },
     {
       label: 'track',
@@ -368,85 +346,137 @@ describe('playlist request contracts', () => {
         targetTrackCount: 15,
         popularity: 'balanced',
         orderMode: 'random',
-        persistToLibrary: true,
-      } satisfies CreateDiscoverRequest,
+      } satisfies GenerateDiscoverRequest,
     },
-  ])('sends the canonical Discover $label payload', async ({ payload }) => {
-    const fetchMock = stubSuccessfulFetch()
+  ])('sends the canonical Discover $label payload to the preview endpoint', async ({ payload }) => {
+    const fetchMock = stubSuccessfulFetch(jazzPreview())
 
-    await api.createDiscover(payload)
+    await api.createDiscoverPreview(payload)
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/playlists/discover'),
+      expect.stringContaining('/api/previews/discover'),
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({
-          Accept: 'application/x-ndjson',
-        }),
+        headers: expect.objectContaining({ Accept: 'application/x-ndjson' }),
         body: JSON.stringify(payload),
       }),
     )
   })
 
-  it('reads NDJSON progress and result for mix creation', async () => {
-    const playlist = {
-      id: 'playlist-1',
-      name: 'Mix',
-      description: '',
-      kind: 'artist_mix',
-      seeds: [{ type: 'artist', id: 'a1', name: 'Sade' }],
-      seedCount: 1,
-      trackCount: 1,
-      totalDurationMs: 1000,
-      spotifyUrl: null,
-      status: 'COMPLETED',
-      imageUrl: null,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-      tracks: [],
-      generation: {
-        version: 1,
-        kind: 'artist_mix',
-        tracksPerSeed: 1,
-        seeds: [{ id: 'a1', name: 'Sade' }],
-        popularity: 'balanced',
-        orderMode: 'random',
-      },
-    }
+  it('reads NDJSON progress and the preview result', async () => {
+    const stored = jazzPreview()
     const body = [
-      JSON.stringify({
-        type: 'progress',
-        phase: 'publishing',
-        current: 1,
-        total: 3,
-        percent: 93,
-      }),
-      JSON.stringify({ type: 'result', playlist }),
+      JSON.stringify({ type: 'progress', phase: 'matching_tracks', current: 1, total: 3, percent: 60 }),
+      JSON.stringify({ type: 'result', playlist: stored }),
       '',
     ].join('\n')
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(body, {
-        status: 200,
-        headers: { 'Content-Type': 'application/x-ndjson' },
-      }),
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(body, {
+          status: 200,
+          headers: { 'Content-Type': 'application/x-ndjson' },
+        }),
+      ),
     )
-    vi.stubGlobal('fetch', fetchMock)
 
     const percents: number[] = []
-    const result = await api.createMix(
-      {
-        kind: 'artist_mix',
-        artistIds: ['artist-1'],
-        tracksPerSeed: 1,
-        popularity: 'balanced',
-        orderMode: 'random',
-        persistToLibrary: true,
-      },
-      { onProgress: (progress) => percents.push(progress.percent) },
+    const result = await api.createMixPreview(mixRequest, {
+      onProgress: (progress) => percents.push(progress.percent),
+    })
+
+    expect(percents).toEqual([60])
+    expect(result.previewId).toBe(stored.previewId)
+  })
+
+  it('rejects a preview result that does not match the strict contract', async () => {
+    const body = `${JSON.stringify({ type: 'result', playlist: { ...jazzPreview(), extra: true } })}\n`
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(body, {
+          status: 200,
+          headers: { 'Content-Type': 'application/x-ndjson' },
+        }),
+      ),
     )
 
-    expect(percents).toEqual([93])
-    expect(result.id).toBe('playlist-1')
+    await expect(api.createMixPreview(mixRequest)).rejects.toMatchObject({
+      code: 'INVALID_GENERATION_RESPONSE',
+    })
+  })
+
+  it('reads a preview state with GET and encodes the identifier', async () => {
+    const state = previewState(null)
+    const fetchMock = stubSuccessfulFetch(state)
+
+    await expect(api.getSpotifyPreview(PREVIEW_ID)).resolves.toEqual(state)
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(`/api/previews/${PREVIEW_ID}`),
+      expect.objectContaining({ credentials: 'include' }),
+    )
+    expect(fetchMock.mock.calls[0]?.[1]).not.toHaveProperty('method', 'POST')
+  })
+
+  it('saves with POST and only the title, cover and Library preference', async () => {
+    const state = previewState(publishedDestination)
+    const fetchMock = stubSuccessfulFetch(state)
+
+    await expect(
+      api.saveSpotifyPreview(PREVIEW_ID, {
+        name: 'Evening jazz',
+        persistToLibrary: true,
+        coverImageBase64: 'cover-data',
+      }),
+    ).resolves.toEqual(state)
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(`/api/previews/${PREVIEW_ID}/save`),
+      expect.objectContaining({ method: 'POST' }),
+    )
+    expect(sentBody(fetchMock)).toEqual({
+      name: 'Evening jazz',
+      persistToLibrary: true,
+      coverImageBase64: 'cover-data',
+    })
+  })
+
+  it('accepts destinations that lack the newer optional fields', async () => {
+    stubSuccessfulFetch(
+      previewState({
+        status: 'publish_incomplete',
+        spotifyUrl: null,
+      }),
+    )
+
+    await expect(api.getSpotifyPreview(PREVIEW_ID)).resolves.toMatchObject({
+      destination: { status: 'publish_incomplete', spotifyUrl: null },
+    })
+  })
+
+  it('treats an unreadable state response as an invalid response, not a definite failure', async () => {
+    stubSuccessfulFetch({ previewId: PREVIEW_ID })
+
+    await expect(
+      api.saveSpotifyPreview(PREVIEW_ID, { name: 'Jazz', persistToLibrary: false }),
+    ).rejects.toMatchObject({ code: 'INVALID_GENERATION_RESPONSE' })
+  })
+
+  it('surfaces the typed error envelope of a failed save', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          { statusCode: 409, code: 'PREVIEW_SAVE_IN_PROGRESS', message: 'busy' },
+          409,
+        ),
+      ),
+    )
+
+    await expect(
+      api.saveSpotifyPreview(PREVIEW_ID, { name: 'Jazz', persistToLibrary: false }),
+    ).rejects.toMatchObject({ status: 409, code: 'PREVIEW_SAVE_IN_PROGRESS' })
   })
 })
 
@@ -538,11 +568,11 @@ describe('Guest generation contracts', () => {
     ).rejects.toMatchObject({ code: 'INVALID_GENERATION_RESPONSE' })
   })
 
-  it('rejects a JSON response that does not match the Spotify contract', async () => {
+  it('rejects a JSON response that does not match the Spotify preview contract', async () => {
     stubSuccessfulFetch(guestPlaylist)
 
     await expect(
-      api.createMix({
+      api.createMixPreview({
         kind: 'genre_mix',
         genreIds: ['jazz'],
         tracksPerSeed: 5,

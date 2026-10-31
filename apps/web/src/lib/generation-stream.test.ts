@@ -3,39 +3,36 @@ import {
   parseGenerationStreamLine,
   readGenerationStream,
 } from '@/lib/generation-stream'
-import { ApiError, isGenerationOutcomeUncertain } from '@/lib/api-error'
+import { ApiError } from '@/lib/api-error'
+import { canRetryGeneration } from '@/lib/generation-failure'
 import {
   GeneratedPlaylistStreamEventSchema,
-  GenerationStreamEventSchema,
+  SpotifyPreviewStreamEventSchema,
   type GeneratedPlaylistDto,
-  type PlaylistDetail,
+  type SpotifyPreviewDto,
 } from '@blendify/contracts'
 
-const playlist = {
-  id: 'playlist-1',
-  name: 'Mix',
-  description: '',
+const generation = {
+  version: 1,
   kind: 'artist_mix',
-  seeds: [{ type: 'artist', id: 'a1', name: 'Sade' }],
-  seedCount: 1,
-  trackCount: 1,
-  totalDurationMs: 1000,
-  spotifyUrl: null,
-  status: 'COMPLETED',
-  imageUrl: null,
-  createdAt: '2026-01-01T00:00:00.000Z',
-  updatedAt: '2026-01-01T00:00:00.000Z',
-  tracks: [],
-  generation: {
-    version: 1,
-    kind: 'artist_mix',
-    filters: { region: null, femaleVocals: false, releaseRange: null, excludeLive: false },
-    tracksPerSeed: 1,
-    seeds: [{ id: 'a1', name: 'Sade' }],
-    popularity: 'balanced',
-    orderMode: 'random',
+  filters: { region: null, femaleVocals: false, releaseRange: null, excludeLive: false },
+  tracksPerSeed: 1,
+  seeds: [{ id: 'a1', name: 'Sade' }],
+  popularity: 'balanced',
+  orderMode: 'random',
+} satisfies GeneratedPlaylistDto['generation']
+
+const spotifyPreview = {
+  previewId: 'AAAAAAAAAAAAAAAAAAAAAA',
+  expiresAt: '2026-01-01T00:30:00.000Z',
+  playlist: {
+    name: 'Mix',
+    description: '',
+    generation,
+    seeds: [{ type: 'artist', id: 'a1', name: 'Sade' }],
+    tracks: [],
   },
-} satisfies PlaylistDetail
+} satisfies SpotifyPreviewDto
 
 describe('parseGenerationStreamLine', () => {
   it('parses progress events', () => {
@@ -49,7 +46,7 @@ describe('parseGenerationStreamLine', () => {
           percent: 26,
           etaSeconds: 12,
         }),
-        GenerationStreamEventSchema,
+        SpotifyPreviewStreamEventSchema,
       ),
     ).toMatchObject({
       type: 'progress',
@@ -60,14 +57,14 @@ describe('parseGenerationStreamLine', () => {
   })
 
   it('ignores blank and invalid lines', () => {
-    expect(parseGenerationStreamLine('', GenerationStreamEventSchema)).toBeNull()
+    expect(parseGenerationStreamLine('', SpotifyPreviewStreamEventSchema)).toBeNull()
     expect(
-      parseGenerationStreamLine('{nope', GenerationStreamEventSchema),
+      parseGenerationStreamLine('{nope', SpotifyPreviewStreamEventSchema),
     ).toBeNull()
     expect(
       parseGenerationStreamLine(
         JSON.stringify({ type: 'nope' }),
-        GenerationStreamEventSchema,
+        SpotifyPreviewStreamEventSchema,
       ),
     ).toBeNull()
   })
@@ -84,7 +81,7 @@ describe('readGenerationStream', () => {
         total: 2,
         percent: 50,
       }),
-      JSON.stringify({ type: 'result', playlist }),
+      JSON.stringify({ type: 'result', playlist: spotifyPreview }),
       '',
     ].join('\n')
 
@@ -95,14 +92,14 @@ describe('readGenerationStream', () => {
 
     const result = await readGenerationStream(
       response,
-      GenerationStreamEventSchema,
+      SpotifyPreviewStreamEventSchema,
       (event) => {
         progress.push(event.percent)
       },
     )
 
     expect(progress).toEqual([50])
-    expect(result.id).toBe('playlist-1')
+    expect(result.previewId).toBe(spotifyPreview.previewId)
   })
 
   it('throws ApiError for stream error events', async () => {
@@ -119,7 +116,7 @@ describe('readGenerationStream', () => {
           status: 200,
           headers: { 'Content-Type': 'application/x-ndjson' },
         }),
-        GenerationStreamEventSchema,
+        SpotifyPreviewStreamEventSchema,
       ),
     ).rejects.toEqual(expect.any(ApiError))
   })
@@ -128,8 +125,8 @@ describe('readGenerationStream', () => {
 const generatedPlaylist = {
   name: 'Mix',
   description: '',
-  generation: playlist.generation,
-  seeds: playlist.seeds,
+  generation,
+  seeds: spotifyPreview.playlist.seeds,
   tracks: [],
   transfer: null,
 } satisfies GeneratedPlaylistDto
@@ -155,7 +152,7 @@ describe('readGenerationStream contracts', () => {
     await expect(
       readGenerationStream(
         ndjson({ type: 'result', playlist: generatedPlaylist }),
-        GenerationStreamEventSchema,
+        SpotifyPreviewStreamEventSchema,
       ),
     ).rejects.toMatchObject({ code: 'INVALID_GENERATION_RESPONSE' })
   })
@@ -163,7 +160,7 @@ describe('readGenerationStream contracts', () => {
   it('rejects a Spotify result read with the Guest schema', async () => {
     await expect(
       readGenerationStream(
-        ndjson({ type: 'result', playlist }),
+        ndjson({ type: 'result', playlist: spotifyPreview }),
         GeneratedPlaylistStreamEventSchema,
       ),
     ).rejects.toMatchObject({ code: 'INVALID_GENERATION_RESPONSE' })
@@ -192,30 +189,18 @@ describe('readGenerationStream contracts', () => {
 })
 
 describe('interrupted generation streams', () => {
-  it('flags a stream that ends without a terminal event as an uncertain outcome', async () => {
+  it('reports a stream that ends without a terminal event as a retryable failure', async () => {
     const error = await readGenerationStream(
-      ndjson({ type: 'progress', phase: 'publishing', current: 1, total: 1, percent: 95 }),
-      GenerationStreamEventSchema,
+      ndjson({ type: 'progress', phase: 'matching_tracks', current: 1, total: 1, percent: 95 }),
+      SpotifyPreviewStreamEventSchema,
     ).catch((caught: unknown) => caught)
 
     expect(error).toBeInstanceOf(ApiError)
-    expect(isGenerationOutcomeUncertain(error)).toBe(true)
+    expect(error).toMatchObject({ code: 'GENERATION_STREAM_INTERRUPTED' })
+    expect(canRetryGeneration(error)).toBe(true)
   })
 
-  it('does not treat a typed backend error or an unknown failure as uncertain', () => {
-    expect(
-      isGenerationOutcomeUncertain(
-        new ApiError('No tracks', 422, {
-          statusCode: 422,
-          code: 'NO_TRACKS_FOUND',
-          message: 'No tracks',
-        }),
-      ),
-    ).toBe(false)
-    expect(isGenerationOutcomeUncertain(new Error('bug'))).toBe(false)
-  })
-
-  it('treats a transport failure as uncertain', () => {
-    expect(isGenerationOutcomeUncertain(new TypeError('network error'))).toBe(true)
+  it('keeps a transport failure retryable because generation writes nothing', () => {
+    expect(canRetryGeneration(new TypeError('network error'))).toBe(true)
   })
 })

@@ -3,20 +3,22 @@ import { useBlocker } from 'react-router-dom'
 import { GUEST_TRANSFER_MUTATION_KEY } from '@/components/playlist/generation-result-helpers'
 import { ConfirmDialog } from '@/components/ui/dialog'
 import { useGuestResultPersistence } from '@/hooks/use-guest-result-persistence'
+import { useSpotifyPreviewLifecycle } from '@/hooks/use-spotify-preview-lifecycle'
 import { useUnloadWarning } from '@/hooks/use-unload-warning'
 import { useT } from '@/i18n/use-t'
-import { usePlaylistRunStore } from '@/stores/playlist-run-store'
+import { isRunBusy, usePlaylistRunStore } from '@/stores/playlist-run-store'
 
 export function PlaylistRunSafeguards() {
   const t = useT()
   const run = usePlaylistRunStore((state) => state.run)
   const { isResultUnsaved } = useGuestResultPersistence()
+  useSpotifyPreviewLifecycle()
   const isPreparingTransfer =
     useIsMutating({ mutationKey: GUEST_TRANSFER_MUTATION_KEY }) > 0
   const isRunActive = run?.status.phase === 'active'
   const isGuestRunActive = isRunActive && run.spec.mode === 'guest'
 
-  useUnloadWarning(isRunActive || isResultUnsaved || isPreparingTransfer)
+  useUnloadWarning(isRunBusy(run) || isResultUnsaved || isPreparingTransfer)
 
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>

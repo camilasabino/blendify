@@ -27,11 +27,7 @@ function storedResultOf(run: PlaylistRun | null): StoredGuestResult | null {
 }
 
 function specOf(stored: StoredGuestResult): PlaylistRunSpec {
-  const base = {
-    mode: 'guest',
-    publication: { persistToLibrary: false },
-    coverFailed: false,
-  } as const
+  const base = { mode: 'guest' } as const
   return stored.feature === 'mix'
     ? { ...base, feature: 'mix', request: stored.request }
     : { ...base, feature: 'discover', request: stored.request }

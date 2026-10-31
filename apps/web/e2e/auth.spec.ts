@@ -65,11 +65,11 @@ test.describe('Logout', () => {
     page,
   }) => {
     await mockGenres(page)
-    const generation = mockPendingGeneration(page, '**/api/playlists/mix')
+    const generation = mockPendingGeneration(page, '**/api/previews/mix')
 
     const abortedRequests: string[] = []
     page.on('requestfailed', (request) => {
-      if (request.url().includes('/api/playlists/mix')) {
+      if (request.url().includes('/api/previews/mix')) {
         abortedRequests.push(redactQaUrl(request.url()))
       }
     })
@@ -80,8 +80,8 @@ test.describe('Logout', () => {
       .getByText('Genres', { exact: true })
       .click()
     await page.getByRole('button', { name: /Jazz/ }).click()
-    await page.getByRole('button', { name: 'Create playlist' }).click()
-    await expect(page.getByText('Creating your playlist')).toBeVisible()
+    await page.getByRole('button', { name: 'Generate preview' }).click()
+    await expect(page.getByText('Generating your preview')).toBeVisible()
 
     await page.getByRole('button', { name: 'Account menu: Camila' }).click()
     await page.getByRole('menuitem', { name: 'Log out' }).click()
@@ -98,7 +98,7 @@ test.describe('Logout', () => {
     // hide it behind the Guest UI.
     await expect
       .poll(() => abortedRequests.length, {
-        message: 'Expected the in-flight /api/playlists/mix request to abort',
+        message: 'Expected the in-flight /api/previews/mix request to abort',
       })
       .toBeGreaterThan(0)
 
