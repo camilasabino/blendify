@@ -1845,9 +1845,14 @@ There is no data rollback: Redis records expire and PostgreSQL is untouched.
 ### 20.9 R3 — retired publish-on-generate routes
 
 R3 removes the generate-and-publish backend. It needs no environment variable,
-no IaC change and no PostgreSQL migration. Ship it at least 24 hours after R2
-(the single user can shorten this after reloading their own tabs), so no open
-tab still runs a bundle that calls the old routes.
+no IaC change and no PostgreSQL migration. It can ship after a successful
+operational preflight and explicit deployment authorization; no minimum time
+after R2 is required. A browser tab still running an older bundle receives
+`410 CLIENT_OUTDATED` and must be reloaded.
+
+Rolling back the API to R2 remains supported. Rolling back the web to a version
+older than R2 while the API is at R3 is not supported: restore a compatible API
+first.
 
 **Legacy routes.** `POST /api/playlists/mix` and `POST /api/playlists/discover`
 answer `410` with the normal error envelope:
