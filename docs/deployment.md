@@ -206,8 +206,8 @@ pinned as a root devDependency) declares:
 |---|---|
 | `postgres` | Railway PostgreSQL database (`postgres()` helper) |
 | `redis` | Railway Redis database (`redis()` helper) |
-| `api` | Source `github("camilasabino/blendify", { branch: "main" })`, repository root as build context; builder `RAILPACK`; build `npm run build:api`; watch patterns `apps/api/**`, `packages/contracts/**`, `package.json`, `package-lock.json`, `.nvmrc`; pre-deploy `npm run prisma:deploy -w @blendify/api`; start `npm run start:prod -w @blendify/api`; health check `/api/health`, timeout 120 s; 1 replica; restart `ON_FAILURE` (5 retries); `RAILPACK_NODE_NPM_INSTALL=npm ci`; `PORT=8080`; non-secret variables; `DATABASE_URL`/`REDIS_URL` as typed references to the databases; secrets as `preserve()`; AI integration: `AI_SERVICE_URL=http://ai.railway.internal:8000`, `AI_SERVICE_TOKEN` as `preserve()` |
-| `ai` | Source `github("camilasabino/blendify", { branch: "main", rootDirectory: "apps/ai" })`; builder `RAILPACK`; watch pattern `apps/ai/**`; start `python -m app.server`; health check `/health`; region `sfo` with 1 replica; draining 30 s; non-secret variables `AI_SERVICE_ENV`, `PORT`, `AI_PROVIDER`, `AI_MODEL`; `AI_PROVIDER_API_KEY` and `AI_SERVICE_TOKEN` as `preserve()` (section 19) |
+| `api` | Source `github("camilasabino/blendify", { branch: "main" })`, repository root as build context; builder `RAILPACK`; build `npm run build:api`; watch patterns `apps/api/**`, `packages/contracts/**`, `package.json`, `package-lock.json`, `.nvmrc`, excluding `apps/api/README.md` and `packages/contracts/README.md`; pre-deploy `npm run prisma:deploy -w @blendify/api`; start `npm run start:prod -w @blendify/api`; health check `/api/health`, timeout 120 s; 1 replica; restart `ON_FAILURE` (5 retries); `RAILPACK_NODE_NPM_INSTALL=npm ci`; `PORT=8080`; non-secret variables; `DATABASE_URL`/`REDIS_URL` as typed references to the databases; secrets as `preserve()`; AI integration: `AI_SERVICE_URL=http://ai.railway.internal:8000`, `AI_SERVICE_TOKEN` as `preserve()` |
+| `ai` | Source `github("camilasabino/blendify", { branch: "main", rootDirectory: "apps/ai" })`; builder `RAILPACK`; watch patterns `apps/ai/**`, excluding `apps/ai/README.md`; start `python -m app.server`; health check `/health`; region `sfo` with 1 replica; draining 30 s; non-secret variables `AI_SERVICE_ENV`, `PORT`, `AI_PROVIDER`, `AI_MODEL`; `AI_PROVIDER_API_KEY` and `AI_SERVICE_TOKEN` as `preserve()` (section 19) |
 
 `PORT=8080` is set explicitly; when adding the custom domain in the
 dashboard, target port 8080 so the domain and the port Nest listens on match.
@@ -402,7 +402,7 @@ only supported way that service reaches production:
 | Branch | `main` | `main` |
 | Environment | `production` | `production` |
 | Wait for CI (`checkSuites`) | `true` | `true` |
-| Watch patterns | `apps/api/**`, `packages/contracts/**`, `package.json`, `package-lock.json`, `.nvmrc` | `apps/ai/**` |
+| Watch patterns | `apps/api/**`, `packages/contracts/**`, `package.json`, `package-lock.json`, `.nvmrc`, `!apps/api/README.md`, `!packages/contracts/README.md` | `apps/ai/**`, `!apps/ai/README.md` |
 
 A push to `main` therefore waits for the GitHub check suites and deploys a
 service only when they pass. A commit that touches nothing under a service's
@@ -1224,7 +1224,7 @@ browser ──► api (NestJS, public) ──► ai (FastAPI, private) ──►
 | Service | `ai`, same Railway project and environment, **no public domain**, no TCP proxy |
 | Source | `github("camilasabino/blendify", { branch: "main", checkSuites: true })`, root directory `apps/ai` (the runtime needs nothing outside it) |
 | Builder | `RAILPACK`: detects `pyproject.toml` + `uv.lock`, Python from `apps/ai/.python-version` (3.13), installs with `uv sync --locked --no-dev` into `/app/.venv` (on `PATH`) |
-| Watch patterns | `apps/ai/**` |
+| Watch patterns | `apps/ai/**`, `!apps/ai/README.md` |
 | Start | `python -m app.server`: reads `PORT`, binds one socket on `::` with `IPV6_V6ONLY=0` and runs uvicorn with the `app.main:create_app` factory on it. The dual-stack socket is intentional: Railway deployment health checks arrive over IPv4, while the private network may use IPv6. Do not replace it with `uvicorn --host ::`, which asyncio leaves IPv6-only (health checks fail with `service unavailable`), nor with `--host 0.0.0.0`, which drops IPv6. uvicorn handles `SIGTERM` gracefully: it waits up to 25 s (`timeout_graceful_shutdown`, set in `app/server.py`, so only this start command applies it; `npm run dev:ai` does not) for requests in flight, cancels what is left, then runs the application shutdown (section 19.8). No `main.py` exists, so Railpack cannot infer a start command |
 | `PORT` | `8000`, set explicitly so `AI_SERVICE_URL` and the health check use the same port |
 | Health check | `/health`, no auth, no model call |

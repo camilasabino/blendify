@@ -26,6 +26,8 @@ export default defineRailway(() => {
         'package.json',
         'package-lock.json',
         '.nvmrc',
+        '!apps/api/README.md',
+        '!packages/contracts/README.md',
       ],
     },
     deploy: {
@@ -69,7 +71,7 @@ export default defineRailway(() => {
     }),
     build: {
       builder: 'RAILPACK',
-      watchPatterns: ['apps/ai/**'],
+      watchPatterns: ['apps/ai/**', '!apps/ai/README.md'],
     },
     deploy: {
       startCommand: 'python -m app.server',
