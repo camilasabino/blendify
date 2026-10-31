@@ -1,3 +1,4 @@
+import { PreviewError } from '@/domain/errors/preview.error';
 import { AiGenerationError } from '@/domain/errors/ai-generation.error';
 import { AiSessionError } from '@/domain/errors/ai-session.error';
 import { CatalogUnavailableError } from '@/domain/errors/catalog-unavailable.error';
@@ -216,6 +217,18 @@ describe('toApiErrorResponse', () => {
   ])('maps the AI session state conflict %s to 409', (error) => {
     expect(toApiErrorResponse(error)).toEqual({
       statusCode: 409,
+      code: error.code,
+      message: error.message,
+    });
+  });
+
+  it.each([
+    [PreviewError.notFound(), 404],
+    [PreviewError.saveInProgress(), 409],
+    [PreviewError.clientOutdated(), 410],
+  ])('maps the preview error %s to its status', (error, statusCode) => {
+    expect(toApiErrorResponse(error)).toEqual({
+      statusCode,
       code: error.code,
       message: error.message,
     });

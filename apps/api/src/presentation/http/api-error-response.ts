@@ -18,6 +18,10 @@ import { BusinessRuleError } from '@/domain/errors/business-rule.error';
 import { CatalogUnavailableError } from '@/domain/errors/catalog-unavailable.error';
 import { CoordinationUnavailableError } from '@/domain/errors/coordination-unavailable.error';
 import { PlaylistPublishIncompleteError } from '@/domain/errors/playlist-publish-incomplete.error';
+import {
+  PreviewError,
+  type PreviewErrorCode,
+} from '@/domain/errors/preview.error';
 import { ProviderOutcomeUnknownError } from '@/domain/errors/provider-outcome-unknown.error';
 import {
   SpotifyProviderError,
@@ -76,6 +80,12 @@ const AI_SESSION_ERROR_STATUS: Record<AiSessionErrorCode, number> = {
   AI_REFINEMENT_NOT_APPLICABLE: HttpStatus.CONFLICT,
 };
 
+const PREVIEW_ERROR_STATUS: Record<PreviewErrorCode, number> = {
+  PREVIEW_NOT_FOUND: HttpStatus.NOT_FOUND,
+  PREVIEW_SAVE_IN_PROGRESS: HttpStatus.CONFLICT,
+  CLIENT_OUTDATED: HttpStatus.GONE,
+};
+
 export function toApiErrorResponse(exception: unknown): ApiErrorResponse {
   if (exception instanceof ZodError) {
     return {
@@ -126,6 +136,14 @@ export function toApiErrorResponse(exception: unknown): ApiErrorResponse {
   if (exception instanceof AiSessionError) {
     return {
       statusCode: AI_SESSION_ERROR_STATUS[exception.code],
+      code: exception.code,
+      message: exception.message,
+    };
+  }
+
+  if (exception instanceof PreviewError) {
+    return {
+      statusCode: PREVIEW_ERROR_STATUS[exception.code],
       code: exception.code,
       message: exception.message,
     };

@@ -633,6 +633,76 @@ export const GeneratedPlaylistStreamEventSchema = z.discriminatedUnion(
   ],
 );
 
+export const SPOTIFY_PREVIEW_ID_LENGTH = 22;
+export const SPOTIFY_PUBLISH_INCOMPLETE_REASONS = [
+  'outcome_unknown',
+  'tracks_incomplete',
+  'library_not_saved',
+  'interrupted',
+] as const;
+export const SPOTIFY_PREVIEW_ERROR_CODES = [
+  'PREVIEW_NOT_FOUND',
+  'PREVIEW_SAVE_IN_PROGRESS',
+  'CLIENT_OUTDATED',
+] as const;
+
+export const SpotifyPreviewIdSchema = z
+  .string()
+  .length(SPOTIFY_PREVIEW_ID_LENGTH)
+  .regex(/^[A-Za-z0-9_-]+$/);
+
+export const SpotifyPreviewPlaylistSchema = GeneratedPlaylistSchema.omit({
+  transfer: true,
+});
+
+export const SpotifyPreviewSchema = z.strictObject({
+  previewId: SpotifyPreviewIdSchema,
+  expiresAt: z.iso.datetime(),
+  playlist: SpotifyPreviewPlaylistSchema,
+});
+
+export const SpotifyPreviewStreamEventSchema = z.discriminatedUnion('type', [
+  GenerationProgressEventSchema,
+  z.object({
+    type: z.literal('result'),
+    playlist: SpotifyPreviewSchema,
+  }),
+  GenerationErrorEventSchema,
+]);
+
+export const SpotifyPublishIncompleteReasonSchema = z.enum(
+  SPOTIFY_PUBLISH_INCOMPLETE_REASONS,
+);
+
+export const SpotifyDestinationSchema = z.discriminatedUnion('status', [
+  z.strictObject({ status: z.literal('publishing') }),
+  z.strictObject({
+    status: z.literal('published'),
+    spotifyUrl: z.string().min(1).nullable(),
+    savedToLibrary: z.boolean(),
+    spotifyId: z.string().min(1).optional(),
+    coverUploadFailed: z.boolean().optional(),
+  }),
+  z.strictObject({
+    status: z.literal('publish_incomplete'),
+    spotifyUrl: z.string().min(1).nullable(),
+    reason: SpotifyPublishIncompleteReasonSchema.optional(),
+  }),
+]);
+
+export const SpotifyPreviewStateSchema = z.strictObject({
+  previewId: SpotifyPreviewIdSchema,
+  expiresAt: z.iso.datetime(),
+  playlist: SpotifyPreviewPlaylistSchema.nullable(),
+  destination: SpotifyDestinationSchema.nullable(),
+});
+
+export const SaveToSpotifyRequestSchema = z.strictObject({
+  name: PlaylistNameSchema,
+  coverImageBase64: PlaylistMetadataSchema.shape.coverImageBase64,
+  persistToLibrary: PlaylistMetadataSchema.shape.persistToLibrary,
+});
+
 export const AI_PROMPT_MAX_LENGTH = 2_000;
 export const AI_REFINEMENT_MAX_LENGTH = AI_PROMPT_MAX_LENGTH;
 export const AI_CLARIFICATION_OPTION_ID_MAX_LENGTH = 64;
@@ -1055,16 +1125,7 @@ export const AiSessionExecutionSchema = z.discriminatedUnion('status', [
 ]);
 
 export const AiSessionDestinationSchema = z.discriminatedUnion('status', [
-  z.strictObject({ status: z.literal('publishing') }),
-  z.strictObject({
-    status: z.literal('published'),
-    spotifyUrl: z.string().min(1).nullable(),
-    savedToLibrary: z.boolean(),
-  }),
-  z.strictObject({
-    status: z.literal('publish_incomplete'),
-    spotifyUrl: z.string().min(1).nullable(),
-  }),
+  ...SpotifyDestinationSchema.options,
   z.strictObject({
     status: z.literal('transfer_prepared'),
     transfer: PlaylistTransferSchema.strict(),
@@ -1109,11 +1170,7 @@ export const CreateAiRefinementRequestSchema = z.strictObject({
     .optional(),
 });
 
-export const PublishAiPlaylistRequestSchema = z.strictObject({
-  name: PlaylistNameSchema,
-  coverImageBase64: PlaylistMetadataSchema.shape.coverImageBase64,
-  persistToLibrary: PlaylistMetadataSchema.shape.persistToLibrary,
-});
+export const PublishAiPlaylistRequestSchema = SaveToSpotifyRequestSchema;
 
 export const TransferAiPlaylistRequestSchema = z.strictObject({
   name: PlaylistNameSchema,
@@ -1177,6 +1234,20 @@ export type GenerationStreamEvent = z.infer<
 export type GeneratedPlaylistStreamEvent = z.infer<
   typeof GeneratedPlaylistStreamEventSchema
 >;
+export type SpotifyPublishIncompleteReason =
+  (typeof SPOTIFY_PUBLISH_INCOMPLETE_REASONS)[number];
+export type SpotifyPreviewErrorCode =
+  (typeof SPOTIFY_PREVIEW_ERROR_CODES)[number];
+export type SpotifyPreviewPlaylistDto = z.infer<
+  typeof SpotifyPreviewPlaylistSchema
+>;
+export type SpotifyPreviewDto = z.infer<typeof SpotifyPreviewSchema>;
+export type SpotifyPreviewStreamEvent = z.infer<
+  typeof SpotifyPreviewStreamEventSchema
+>;
+export type SpotifyDestinationDto = z.infer<typeof SpotifyDestinationSchema>;
+export type SpotifyPreviewStateDto = z.infer<typeof SpotifyPreviewStateSchema>;
+export type SaveToSpotifyRequest = z.input<typeof SaveToSpotifyRequestSchema>;
 export type StartPlaybackRequest = z.infer<typeof StartPlaybackRequestSchema>;
 export type PlaybackDeviceDto = z.infer<typeof PlaybackDeviceSchema>;
 export type AiUnsupportedConstraintCategory = z.infer<

@@ -375,6 +375,37 @@ describe('RedisCacheService coordination writes', () => {
     }
   });
 
+  it('fails closed on a coordinated existence check instead of reporting the key absent', async () => {
+    await expect(
+      unavailable('fail-closed').exists('claim', COORDINATION),
+    ).rejects.toBeInstanceOf(CoordinationUnavailableError);
+
+    const client = { exists: jest.fn().mockRejectedValue(new Error('boom')) };
+    const connection = {
+      readyClient: () => client,
+    } as unknown as RedisConnection;
+    await expect(
+      new RedisCacheService(connection, 'fail-closed').exists(
+        'claim',
+        COORDINATION,
+      ),
+    ).rejects.toBeInstanceOf(CoordinationUnavailableError);
+  });
+
+  it('keeps the best-effort existence check on its memory fallback by default', async () => {
+    const client = { exists: jest.fn().mockRejectedValue(new Error('boom')) };
+    const connection = {
+      readyClient: () => client,
+    } as unknown as RedisConnection;
+
+    await expect(
+      new RedisCacheService(connection, 'fail-closed').exists('claim'),
+    ).resolves.toBe(false);
+    await expect(unavailable('fail-closed').exists('claim')).resolves.toBe(
+      false,
+    );
+  });
+
   it('never grants a claim from memory after Redis became unavailable', async () => {
     let ready = true;
     const client = { set: jest.fn().mockResolvedValue('OK') };
@@ -414,6 +445,47 @@ describe('RedisCacheService coordination writes', () => {
     await expect(
       cache.renewIfValue('claim', 'owner-a', 30_000, COORDINATION),
     ).resolves.toBe(true);
+  });
+
+  it('fails closed on coordinated JSON reads and writes while Redis is unavailable', async () => {
+    const cache = unavailable('fail-closed');
+
+    await expect(cache.getJson('record', COORDINATION)).rejects.toBeInstanceOf(
+      CoordinationUnavailableError,
+    );
+    await expect(
+      cache.setJson('record', { ok: true }, 60_000, COORDINATION),
+    ).rejects.toBeInstanceOf(CoordinationUnavailableError);
+  });
+
+  it('fails closed when Redis errors on a coordinated JSON read or write', async () => {
+    const failure = new Error('Command timed out');
+    const client = {
+      get: jest.fn().mockRejectedValue(failure),
+      set: jest.fn().mockRejectedValue(failure),
+    };
+    const cache = new RedisCacheService(
+      { readyClient: () => client } as unknown as RedisConnection,
+      'fail-closed',
+    );
+
+    await expect(cache.getJson('record', COORDINATION)).rejects.toBeInstanceOf(
+      CoordinationUnavailableError,
+    );
+    await expect(
+      cache.setJson('record', { ok: true }, 60_000, COORDINATION),
+    ).rejects.toBeInstanceOf(CoordinationUnavailableError);
+    await expect(cache.getJson('record')).resolves.toBeNull();
+  });
+
+  it('keeps coordinated JSON in process memory for Redis-less local development', async () => {
+    const cache = unavailable('memory');
+
+    await cache.setJson('record', { ok: true }, 60_000, COORDINATION);
+
+    await expect(cache.getJson('record', COORDINATION)).resolves.toEqual({
+      ok: true,
+    });
   });
 
   it('keeps the raw Redis error for coordination writes outside the fail-closed policy', async () => {

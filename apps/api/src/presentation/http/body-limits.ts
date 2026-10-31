@@ -46,6 +46,21 @@ export const ROUTE_BODY_LIMITS: RouteBodyLimit[] = [
     path: '/api/generate/discover',
     limit: BODY_LIMITS.publicGeneration,
   },
+  {
+    method: 'POST',
+    path: '/api/previews/mix',
+    limit: BODY_LIMITS.publicGeneration,
+  },
+  {
+    method: 'POST',
+    path: '/api/previews/discover',
+    limit: BODY_LIMITS.publicGeneration,
+  },
+  {
+    method: 'POST',
+    path: '/api/previews/:previewId/save',
+    limit: BODY_LIMITS.spotifyGeneration,
+  },
   { method: 'POST', path: '/api/transfers', limit: BODY_LIMITS.transfer },
   {
     method: 'POST',

@@ -51,6 +51,14 @@ describe('bodyLimitFor', () => {
     expect(bodyLimitFor('POST', '/api/ai/sessions')).toBe('16kb');
   });
 
+  it('sizes the preview routes like their generation and publication counterparts', () => {
+    expect(bodyLimitFor('POST', '/api/previews/mix')).toBe('32kb');
+    expect(bodyLimitFor('POST', '/api/previews/discover')).toBe('32kb');
+    expect(bodyLimitFor('POST', '/api/previews/abc123/save')).toBe('512kb');
+    expect(bodyLimitFor('GET', '/api/previews/abc123/save')).toBe('16kb');
+    expect(bodyLimitFor('POST', '/api/previews/abc123')).toBe('16kb');
+  });
+
   it('declares the approved profiles', () => {
     expect(BODY_LIMITS).toEqual({
       default: '16kb',
@@ -59,7 +67,7 @@ describe('bodyLimitFor', () => {
       publicGeneration: '32kb',
       transfer: '64kb',
     });
-    expect(ROUTE_BODY_LIMITS).toHaveLength(7);
+    expect(ROUTE_BODY_LIMITS).toHaveLength(10);
   });
 });
 

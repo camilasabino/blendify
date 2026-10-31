@@ -76,8 +76,11 @@ export class RedisCacheService {
     private readonly coordinationFallback: CoordinationFallback = 'memory',
   ) {}
 
-  async getJson<T>(key: string): Promise<T | null> {
-    const client = this.connection.readyClient();
+  async getJson<T>(
+    key: string,
+    options: CacheWriteOptions = {},
+  ): Promise<T | null> {
+    const client = this.clientFor(key, options);
     try {
       if (client) {
         const raw = await client.get(key);
@@ -87,6 +90,7 @@ export class RedisCacheService {
         return JSON.parse(raw) as T;
       }
     } catch (error) {
+      this.failIfCoordinated(error, options);
       this.logger.warn(
         `Redis get failed for ${key}: ${
           error instanceof Error ? error.message : String(error)
@@ -110,10 +114,15 @@ export class RedisCacheService {
     }
   }
 
-  async setJson(key: string, value: unknown, ttlMs: number): Promise<void> {
+  async setJson(
+    key: string,
+    value: unknown,
+    ttlMs: number,
+    options: CacheWriteOptions = {},
+  ): Promise<void> {
     const ttlSec = Math.max(1, Math.ceil(ttlMs / 1000));
     const encoded = JSON.stringify(value);
-    const client = this.connection.readyClient();
+    const client = this.clientFor(key, options);
 
     try {
       if (client) {
@@ -121,6 +130,7 @@ export class RedisCacheService {
         return;
       }
     } catch (error) {
+      this.failIfCoordinated(error, options);
       this.logger.warn(
         `Redis set failed for ${key}: ${
           error instanceof Error ? error.message : String(error)
@@ -163,14 +173,15 @@ export class RedisCacheService {
     return true;
   }
 
-  async exists(key: string): Promise<boolean> {
-    const client = this.connection.readyClient();
+  async exists(key: string, options: CacheWriteOptions = {}): Promise<boolean> {
+    const client = this.clientFor(key, options);
 
     try {
       if (client) {
         return (await client.exists(key)) > 0;
       }
     } catch (error) {
+      this.failIfCoordinated(error, options);
       this.logger.warn(
         `Redis exists failed for ${key}: ${
           error instanceof Error ? error.message : String(error)

@@ -72,4 +72,24 @@ describe('OriginCsrfGuard', () => {
       ),
     ).toThrow(/not allowed/);
   });
+
+  it.each([
+    '/api/previews/mix',
+    '/api/previews/discover',
+    '/api/previews/abcdefghijklmnopqrstuv/save',
+  ])('requires a matching Origin on the preview mutation %s', (path) => {
+    expect(() => guard.canActivate(ctx({ method: 'POST', path }))).toThrow(
+      /Missing Origin/,
+    );
+    expect(() =>
+      guard.canActivate(
+        ctx({ method: 'POST', path, origin: 'https://evil.example' }),
+      ),
+    ).toThrow(/not allowed/);
+    expect(
+      guard.canActivate(
+        ctx({ method: 'POST', path, origin: 'http://localhost:5173' }),
+      ),
+    ).toBe(true);
+  });
 });
